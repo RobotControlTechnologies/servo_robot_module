@@ -52,7 +52,9 @@ void loop(void) {
         dataBuf[counter++] = rxBuf;
         if(counter > 2) {
           stateMachine = 0;
-          counter=0;
+          counter = 0;
+          
+          Serial.print("servo = " + String(dataBuf[0]) + "; value = " + String(dataBuf[1]) + ";");
           
           myservos[dataBuf[0]].write(dataBuf[1]);
           delay(150);

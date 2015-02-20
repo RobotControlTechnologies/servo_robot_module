@@ -204,7 +204,7 @@ FunctionResult* ServoRobot::executeFunction(regval command_index, regval *args) 
 #ifdef _DEBUG
 	EnterCriticalSection(&cheking_mutex);
 #endif
-	bool have_error = !SP->WriteData(buffer, 4);
+	bool have_error = !SP->WriteData(buffer, 3);
 #ifdef _DEBUG
 	LeaveCriticalSection(&cheking_mutex);
 #endif

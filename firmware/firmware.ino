@@ -45,16 +45,18 @@ void loop(void) {
   q = Serial.available();
   if (q) {
     while(q--) {
+      Serial.print("rxBuf = " + String(rxBuf) + "\n");
       rxBuf = Serial.read(); 
-      if (stateMachine == 0) {
-        stateMachine = rxBuf == 0xFF ? 1 : 0;
+      if (rxBuf == 0xFF) {
+        stateMachine = 1;
+        counter = 0;        
       } else if (stateMachine == 1) {
         dataBuf[counter++] = rxBuf;
         if(counter > 2) {
           stateMachine = 0;
           counter = 0;
           
-          Serial.print("servo = " + String(dataBuf[0]) + "; value = " + String(dataBuf[1]) + ";");
+          Serial.print("servo = " + String(dataBuf[0]) + "; value = " + String(dataBuf[1]) + ";\n");
           
           myservos[dataBuf[0]].write(dataBuf[1]);
           delay(150);

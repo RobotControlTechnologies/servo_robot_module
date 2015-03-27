@@ -164,6 +164,8 @@ void ServoRobotModule::robotFree(Robot *robot) {
 	}
 }
 
+void ServoRobotModule::prepare(colorPrintf_t *colorPrintf_p, colorPrintfVA_t *colorPrintfVA_p) {}
+
 void ServoRobotModule::final() {
 	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		delete (*i);

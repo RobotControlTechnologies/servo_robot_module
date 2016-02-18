@@ -41,11 +41,15 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <LinkIncremental>true</LinkIncremental>
-    <OutDir>..\..\bin\robot_modules\servo\</OutDir>
+    <OutDir>d:\workspace\test\rcml\test\rcml_test\tests\robot_modules\servo</OutDir>
     <TargetName>servo_module</TargetName>
+    <IncludePath>D:\workspace\rcml\source\module_headers\100;D:\workspace\rcml\simpleini;D:\workspace\SerialClass;D:\workspace\rcml\source\module_wrapper\rcml_common;D:\workspace\rcml\source\module_headers;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <LinkIncremental>false</LinkIncremental>
+    <IncludePath>D:\workspace\rcml\source\module_headers\100;D:\workspace\rcml\simpleini;D:\workspace\SerialClass;D:\workspace\rcml\source\module_wrapper\rcml_common;D:\workspace\rcml\source\module_headers;$(IncludePath)</IncludePath>
+    <OutDir>d:\workspace\test\rcml\test\rcml_test\tests\robot_modules\servo</OutDir>
+    <TargetName>servo_module</TargetName>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -53,7 +57,7 @@
       </PrecompiledHeader>
       <WarningLevel>Level3</WarningLevel>
       <Optimization>Disabled</Optimization>
-      <PreprocessorDefinitions>WIN32;_DEBUG;_WINDOWS;_USRDLL;SERVO_ROBOT_MODULE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>IS_MODULE; WIN32;_DEBUG;_WINDOWS;_USRDLL;SERVO_ROBOT_MODULE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
       <AdditionalIncludeDirectories>C:\robot_project\simpleini;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
@@ -69,7 +73,7 @@
       <Optimization>MaxSpeed</Optimization>
       <FunctionLevelLinking>true</FunctionLevelLinking>
       <IntrinsicFunctions>true</IntrinsicFunctions>
-      <PreprocessorDefinitions>WIN32;NDEBUG;_WINDOWS;_USRDLL;SERVO_ROBOT_MODULE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
+      <PreprocessorDefinitions>IS_MODULE; WIN32;NDEBUG;_WINDOWS;_USRDLL;SERVO_ROBOT_MODULE_EXPORTS;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -79,10 +83,12 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClInclude Include="..\..\rcml\source\module_wrapper\rcml_common\error.h" />
     <ClInclude Include="..\..\SerialClass\SerialClass.h" />
     <ClInclude Include="servo_robot_module.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="..\..\rcml\source\module_wrapper\rcml_common\error.cpp" />
     <ClCompile Include="..\..\SerialClass\SerialClass.cpp" />
     <ClCompile Include="servo_robot_module.cpp" />
   </ItemGroup>

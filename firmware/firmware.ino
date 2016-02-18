@@ -10,9 +10,9 @@
 
 Multiservo myservos[6];
 
-int q = 0;
+int count_bytes = 0;
 byte rxBuf = 0;
-char stateMachine = 0, counter = 0;
+int stateMachine = 0, counter = 0;
 byte dataBuf[2] = {0};
 
 String input_buffer = "";
@@ -27,28 +27,18 @@ void setup(void) {
   myservos[4].attach(MULTISERVO_PIN_4);
   myservos[5].attach(MULTISERVO_PIN_5);
   
-  myservos[0].write(90);
-  delay(150);
-  myservos[1].write(90);
-  delay(150);
-  myservos[2].write(90);
-  delay(150);
-  myservos[3].write(90);
-  delay(150);  
-  myservos[4].write(90);
-  delay(150);  
-  myservos[5].write(90);
-  delay(150);  
 }
 
 void loop(void) {
-  q = Serial.available();
-  if (q) {
-    while(q--) {
+  count_bytes = Serial.available();
+
+  if (count_bytes){
+    while(count_bytes--) {
       rxBuf = Serial.read();
       Serial.print("rxBuf = " + String(rxBuf) + "\n");
       if (stateMachine == 0) {
-        stateMachine = rxBuf == 0xFF ? 1 : 0;
+        stateMachine = rxBuf == 255 ? 1 : 0;
+        Serial.print("stateMachine = " + String(stateMachine) + "\n");
       } else if (stateMachine == 1) {
         dataBuf[counter++] = rxBuf;
         if (counter > 1) {
@@ -57,7 +47,7 @@ void loop(void) {
           
           Serial.print("servo = " + String(dataBuf[0]) + "; value = " + String(dataBuf[1]) + ";\n");
           
-          myservos[dataBuf[0]].write(dataBuf[1]);
+          myservos[dataBuf[0] -1].write(dataBuf[1]);
           delay(150);
         }
       }

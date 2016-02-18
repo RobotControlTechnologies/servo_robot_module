@@ -1,14 +1,16 @@
 #include <windows.h>
 #include <stdio.h>
 #include <stdlib.h>
-
+#include <string>
 #include <vector>
 #include <process.h>
 
-#include "../module_headers/module.h"
-#include "../module_headers/robot_module.h"
+#include "module.h"
+#include "robot_module.h"
 
-#include "../../SerialClass/SerialClass.h"
+#include "error.h"
+
+#include "SerialClass.h"
 #include "SimpleIni.h"
 
 #include "servo_robot_module.h"
@@ -16,10 +18,29 @@
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 /* GLOBALS CONFIG */
+#define IID "RCT.Servo_robot_module_v100"
 const int COUNT_FUNCTIONS = 1;
+#define BUILD_NUMBER 2
+
+
+#define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
+	robot_axis[axis_id] = new AxisData; \
+	robot_axis[axis_id]->axis_index = axis_id + 1; \
+	robot_axis[axis_id]->upper_value = UPPER_VALUE; \
+	robot_axis[axis_id]->lower_value = LOWER_VALUE; \
+	robot_axis[axis_id]->name = AXIS_NAME; \
+	++axis_id;
+
+#define ADD_2F_FUNCTION(name)                         \
+  pt = new FunctionData::ParamTypes[2];               \
+  pt[0] = FunctionData::ParamTypes::FLOAT;            \
+  pt[1] = FunctionData::ParamTypes::FLOAT;            \
+  robot_functions[function_id] =                      \
+      new FunctionData(function_id + 1, 2, pt, name); \
+  function_id++;
 
 #define DEFINE_ALL_FUNCTIONS \
-	ADD_ROBOT_FUNCTION("move_servo", 2, true)				/*number, angle*/
+	ADD_2F_FUNCTION("move_servo"); /*number, angle*/
 
 #define DEFINE_ALL_AXIS \
 	/*ADD_ROBOT_AXIS("locked", 1, 0)\
@@ -31,31 +52,45 @@ const int COUNT_FUNCTIONS = 1;
 inline int getIniValueInt(CSimpleIniA *ini, const char *section_name, const char *key_name) {
 	const char *tmp = ini->GetValue(section_name, key_name, NULL);
 	if (!tmp) {
-		printf("Not specified value for \"%s\" in section \"%s\"!\n", key_name, section_name);
-		throw;
+		throw new Error(ConsoleColor(ConsoleColor::red),
+            		"Not specified value for \"%s\" in section \"%s\"!\n",
+            		 key_name, section_name);
 	}
 	return strtol(tmp, NULL, 0);
 }
 inline const char* getIniValueChar(CSimpleIniA *ini, const char *section_name, const char *key_name) {
 	const char *result = ini->GetValue(section_name, key_name, NULL);
 	if (!result) {
-		printf("Not specified value for \"%s\" in section \"%s\"!\n", key_name, section_name);
-		throw;
+		throw new Error(ConsoleColor(ConsoleColor::red),
+            		"Not specified value for \"%s\" in section \"%s\"!\n",
+            		 key_name, section_name);
 	}
 	return result;
 }
 
 ServoRobotModule::ServoRobotModule() {
+	mi = new ModuleInfo;
+	mi->uid = IID;
+	mi->mode = ModuleInfo::Modes::PROD;
+	mi->version = BUILD_NUMBER;
+	mi->digest = NULL;
+
 	{
-		robot_functions = new FunctionData*[COUNT_FUNCTIONS];
-		regval function_id = 0;
-		DEFINE_ALL_FUNCTIONS
+		robot_functions = new FunctionData *[COUNT_FUNCTIONS];
+		system_value function_id = 0;
+		FunctionData::ParamTypes *pt;
+		DEFINE_ALL_FUNCTIONS;
 	}
 	/*{
 		robot_axis = new AxisData*[COUNT_AXIS];
-		regval axis_id = 0;
+		system_value axis_id = 0;
 		DEFINE_ALL_AXIS
 	}*/
+}
+
+const struct ModuleInfo &ServoRobotModule::getModuleInfo() { return *mi; }
+
+int ServoRobotModule::init() {
 
 	WCHAR DllPath[MAX_PATH] = {0};
 	GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, _countof(DllPath));
@@ -68,75 +103,113 @@ ServoRobotModule::ServoRobotModule() {
 	wcsncpy(ConfigPath, DllPath, path_len);
 	wcscat(ConfigPath, L"\\config.ini");
 
+	CSimpleIniA ini;
 	ini.SetMultiKey(true);
+	// Считали файл
 
-	if (ini.LoadFile(ConfigPath) < 0) {
-		printf("Can't load '%s' file!\n", ConfigPath);
-		is_error_init = true;
-		return;
-	}
-
-	try {
-		COUNT_AXIS = getIniValueInt(&ini, "main", "count_servos");
-	} catch(...) {
-		is_error_init = true;
-		return;
-	}
-
-	is_error_init = false;
-}
-
-const char *ServoRobotModule::getUID() {
-	return "Servo robot module 1.00";
-}
-
-int ServoRobotModule::init() {
-	if (is_error_init) {
-		return 1;
-	}
-
+	Error *init_error = new Error;
 	try{
-		int count_robots = getIniValueInt(&ini, "main", "count_robots");
-	
-		for (int i = 1; i <= count_robots; ++i) {
-			std::string str("robot_port_");
+		if (ini.LoadFile(ConfigPath) < 0) {
+			throw new Error(ConsoleColor(ConsoleColor::red),
+							"Can't load '%s' file!\n", ConfigPath);
+		}
+		// Считали Оси
+		COUNT_AXIS = getIniValueInt(&ini, "main", "servo_count");
+
+		// Считали по количеству осей граничные значения для серв
+		std::vector<ServoLimits> servo_limits;
+		std::vector<unsigned char> start_position;
+		for (int i = 1; i < COUNT_AXIS+1; ++i)
+		{
+			Error *_error = new Error;
+			std::string str("servo_");
 			str += std::to_string(i);
-			const char *port_name = getIniValueChar(&ini, "main", str.c_str());
+			int max;
+			int min;
+			int start_pos;
+			try {
+				
+				try{
+					min = getIniValueInt(&ini, str.c_str(), "min");
+				} catch (Error *e){
+					_error->append(e);
+				}
+				if (min < 0 || min > 180)
+				{
+					_error->append(new Error(ConsoleColor(ConsoleColor::red),
+		                    		"Wrong min limit '%d', should be in borders [0,180]",
+		                    		 min));
+				}
+				
+				try{
+					max = getIniValueInt(&ini, str.c_str(), "max");
+				} catch (Error *e){
+					_error->append(e);
+				}
 
-			int len_p = 5 + strlen(port_name) + 1;
-			char *p = new char[len_p]; 
-			strcpy(p, "\\\\.\\");
-			strcat(p, port_name);
-
-			Serial* SP = new Serial(p);
-			delete p;
-
-			if (!SP->IsConnected()) {
-				printf("Can't connected to the serial port %s!", port_name);
+				if (max < 0 || max > 180)
+				{
+					_error->append(new Error(ConsoleColor(ConsoleColor::red),
+		                    		"Wrong max limit '%d', should be in borders [0,180]",
+		                    		 max));
+				}
+				if (max < min) {
+					_error->append(new Error(ConsoleColor(ConsoleColor::red),
+		                    		"min bigger than max"));
+				}
+		
+				// Тепеь считываем начальные положения серв
+				try{
+					start_pos = getIniValueInt(&ini, "start_position", str.c_str());
+				} catch (Error *e){
+					_error->append(e);
+				}
+				// Сравниваем
+				if (start_pos < min || start_pos > max)
+				{
+					_error->append(new Error(ConsoleColor(ConsoleColor::red),
+		                    		"Start position is out of limits"));
+				}
+				_error->checkSelf();
+			} catch (Error *e){
+				init_error->append(new Error(e, ConsoleColor(ConsoleColor::red), "%s errors:",
+	                    str.c_str()));
 				continue;
 			}
 
-			ServoRobot *servo_robot = new ServoRobot(SP, COUNT_AXIS);
-			printf("DLL: connected to %s robot %p\n", port_name, servo_robot);
-			aviable_connections.push_back(servo_robot);
-
-#ifdef _DEBUG
-			servo_robot->startCheckingSerial();
-#endif
+			servo_limits.push_back(ServoLimits(i, min, max));
+			start_position.push_back(start_pos);
 		}
-	} catch(...) {
+
+		init_error->checkSelf();
+	
+		//считали количество роботов
+		int robots_count = getIniValueInt(&ini, "main", "robots_count");
+		
+		// Теперь по количеству роботов читаем порты
+		for (int i = 1; i <= robots_count; ++i) {
+			std::string str("robot_port_");
+			str += std::to_string(i);
+			std::string port(getIniValueChar(&ini, "main", str.c_str()));
+
+			ServoRobot *servo_robot = new ServoRobot(port, COUNT_AXIS, servo_limits, start_position);
+			aviable_connections.push_back(servo_robot);
+		}
+	} catch(Error *e) {
+		colorPrintf(ConsoleColor(ConsoleColor::red), "Error(s): %s",
+                    e->emit().c_str());
+	    delete e;
 		return 1;
 	}
-
 	return 0;
 }
 
-FunctionData** ServoRobotModule::getFunctions(int *count_functions) {
+FunctionData** ServoRobotModule::getFunctions(unsigned int *count_functions) {
 	(*count_functions) = COUNT_FUNCTIONS;
 	return robot_functions;
 }
 
-AxisData** ServoRobotModule::getAxis(int *count_axis) {
+AxisData** ServoRobotModule::getAxis(unsigned int *count_axis) {
 	//(*count_axis) = COUNT_AXIS;
 	//return robot_axis;
 	(*count_axis) = 0;
@@ -145,8 +218,15 @@ AxisData** ServoRobotModule::getAxis(int *count_axis) {
 
 Robot* ServoRobotModule::robotRequire() {
 	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
-		if ((*i)->is_aviable) {
-			(*i)->is_aviable = false;
+		if ((*i)->isAvaliable()) {
+			try {
+				(*i)->connect();
+			} catch (Error *e){
+				colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
+                    e->emit().c_str());
+		        delete e;
+		        return NULL;
+			}
 			return (*i);
 		}
 	}
@@ -158,13 +238,30 @@ void ServoRobotModule::robotFree(Robot *robot) {
 
 	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
 		if ((*i) == servo_robot) {
-			servo_robot->is_aviable = true;
+			servo_robot->disconnect();
 			return;
 		}
 	}
 }
 
-void ServoRobotModule::prepare(colorPrintf_t *colorPrintf_p, colorPrintfVA_t *colorPrintfVA_p) {}
+void ServoRobot::prepare(colorPrintfRobot_t *colorPrintf_p,
+                         colorPrintfRobotVA_t *colorPrintfVA_p) {
+  this->colorPrintf_p = colorPrintfVA_p;
+}
+
+void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
+                               colorPrintfModuleVA_t *colorPrintfVA_p) {
+  this->colorPrintf_p = colorPrintfVA_p;
+}
+
+int ServoRobotModule::startProgram(int uniq_index) { return 0; }
+
+int ServoRobotModule::endProgram(int uniq_index) { return 0; }
+
+void *ServoRobotModule::writePC(unsigned int *buffer_length) {
+  (*buffer_length) = 0;
+  return NULL;
+}
 
 void ServoRobotModule::final() {
 	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
@@ -185,92 +282,133 @@ void ServoRobotModule::destroy() {
 	//delete[] robot_axis;
 	delete this;
 }
+bool ServoRobot::isAvaliable(){
+	return is_aviable;
+};
 
-FunctionResult* ServoRobot::executeFunction(regval command_index, regval *args) {
+void ServoRobot::disconnect(){
+	is_aviable = true;
+};
+
+void ServoRobot::setStartPosition(){
+	unsigned char buffer[3];
+	buffer[0] = 0xFF;
+
+	for (unsigned char i = 0; i < start_position.size(); ++i)
+	{
+		buffer[1] = i;
+		buffer[2] = start_position[i];
+		if(!SP->WriteData(buffer, 3)) {
+			throw new Error(ConsoleColor(ConsoleColor::red),
+            		"Can't write '%d' to servo %d. Setup start position failed!", 
+            		buffer[2], buffer[1]);
+		}
+	}
+	
+};
+
+void ServoRobot::connect(){
+	printf("port %s\n",port.c_str());
+	SP = new Serial((char *)port.c_str());
+	Sleep(150);
+	if (!SP->IsConnected()){
+		throw new Error(ConsoleColor(ConsoleColor::red),
+                    "Can't connect to robot");
+	}
+
+	try{
+		setStartPosition();
+	} catch(Error *e){
+		throw e;
+	}
+
+	is_aviable = false;
+};
+
+FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value command_index,
+                                void **args) {
 	if (command_index != 1) {
 		return NULL;
 	}
 
-	if ((((*args)+1) > count_axis) || (((*args)+1) <= 0)) {
-		return new FunctionResult(0);
-	}
-	if (((*args+1) > 180) || ((*args+1) <= 0)) {
-		return new FunctionResult(0);
-	}
+	FunctionResult *fr = NULL;
+	try {
+		switch(command_index) {
+			case 1:{
+				unsigned char input1 =(unsigned char) *(variable_value *)args[0];
+				unsigned char input2 =(unsigned char) *(variable_value *)args[1];
+	
+				if ((input1 > count_axis) || (input1 <= 0)) {
+					throw new Error(ConsoleColor(ConsoleColor::red),
+                    		"wrong axis number %d", input1);
+				}
 
-	unsigned char *buffer = new unsigned char[3];
-	buffer[0] = 0xFF;
-	buffer[1] = *args;
-	buffer[2] = *(args + 1);
+				int _min = servo_limits[input1-1]._min;
+				int _max = servo_limits[input1-1]._max;
+				if ((input2 > _max) || (input2 <= _min)) {
+					throw new Error(ConsoleColor(ConsoleColor::red),
+                    		"wrong axis value %d, should be in borders [%d, %d]",
+                    		input1, _min, _max);
+				}
 
-#ifdef _DEBUG
-	EnterCriticalSection(&cheking_mutex);
-#endif
-	bool have_error = !SP->WriteData(buffer, 3);
-#ifdef _DEBUG
-	LeaveCriticalSection(&cheking_mutex);
-#endif
+				// Если прошел то разрешаем
+				unsigned char buffer[3];
+				buffer[0] = 0xFF;
+				buffer[1] = input1;
+				buffer[2] = input2;
 
-	delete[] buffer;
-
-	if (have_error) {
-		return new FunctionResult(0);
-	}
-	return new FunctionResult(1, 0);
-}
-
-void ServoRobot::axisControl(regval axis_index, regval value) {}
-
-#ifdef _DEBUG
-unsigned int WINAPI procCheckingSerial(void *arg) {
-	ServoRobot *servo_robot = static_cast<ServoRobot*>(arg);
-	servo_robot->checkSerial();
-	return 0;
-}
-
-void ServoRobot::startCheckingSerial() {
-	checkingSerial = true;
-	InitializeCriticalSection(&cheking_mutex);
-	thread_handle = (HANDLE) _beginthreadex(NULL, 0, procCheckingSerial, this, 0, &tid);
-}
-
-void ServoRobot::checkSerial() {
-	const int dataLength = 256;
-	char incomingData[dataLength] = "";
-	int readResult = 0;
-
-	EnterCriticalSection(&cheking_mutex);
-	while(SP->IsConnected() && checkingSerial) {
-		readResult = SP->ReadData(incomingData, dataLength);
-		LeaveCriticalSection(&cheking_mutex);
-
-		if (readResult != -1) {
-			printf("Bytes read: %i\n", readResult);
-			incomingData[readResult] = 0;
-			printf("%s\n", incomingData);
+				if(!SP->WriteData(buffer, 3)) {
+					throw new Error(ConsoleColor(ConsoleColor::red),
+                    		"Can't write '%d' to servo %d. Sending data failed!", input2, input1);
+				}
+				break;
+			}
+			default:{
+				break;
+			}
 		}
-		Sleep(500);
 
-		EnterCriticalSection(&cheking_mutex);
+		fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
+	} catch (Error *e){
+		colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
+                	e->emit().c_str());
+	    fr = new FunctionResult(FunctionResult::Types::EXCEPTION, 0);
+	    delete e;
 	}
-	LeaveCriticalSection(&cheking_mutex);
+
+	return fr;
 }
-#endif
+
+void ServoRobot::axisControl(system_value axis_index, variable_value value) {}
 
 ServoRobot::~ServoRobot() {
-#ifdef _DEBUG
-	EnterCriticalSection(&cheking_mutex);
-	checkingSerial = false;
-	LeaveCriticalSection(&cheking_mutex);
-
-	WaitForSingleObject(thread_handle, INFINITE);
-	CloseHandle(thread_handle);
-	DeleteCriticalSection(&cheking_mutex);
-#endif
-
-	SP->~Serial();
+	if (SP) {
+		if (SP->IsConnected())
+		{
+			SP->~Serial();
+		}
+	}
 }
 
-__declspec(dllexport) RobotModule* getRobotModuleObject() {
-	return new ServoRobotModule();
+void ServoRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+  va_list args;
+  va_start(args, mask);
+  (*colorPrintf_p)(this, port.c_str(), colors, mask, args);
+  va_end(args);
+}
+
+void ServoRobotModule::colorPrintf(ConsoleColor colors, const char *mask, ...) {
+  va_list args;
+  va_start(args, mask);
+  (*colorPrintf_p)(this, colors, mask, args);
+  va_end(args);
+}
+
+
+PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
+  return ROBOT_MODULE_API_VERSION;
+};
+
+PREFIX_FUNC_DLL RobotModule *getRobotModuleObject() {
+  return new ServoRobotModule();
 }

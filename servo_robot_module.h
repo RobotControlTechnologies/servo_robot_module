@@ -19,7 +19,7 @@ class ServoRobot : public Robot {
 		std::string port;
 		void colorPrintf(ConsoleColor colors, const char *mask, ...);
 		void setStartPosition();
-		void setSafePosition();
+		void setSafePosition(unsigned char command);
 		bool is_aviable;
     public: 
 		

@@ -307,28 +307,37 @@ bool ServoRobot::isAvaliable(){
 };
 
 void ServoRobot::disconnect(){
-	setSafePosition();
+	setSafePosition(0xFF);
 	is_aviable = true;
 };
+
+#define WRITE_POS_TO_SERVO(servo, position) \
+	buffer[1] = servo; \
+	buffer[2] = position[servo-1]; \
+	if (!SP->WriteData(buffer, 3)) { \
+		throw new Error(ConsoleColor(ConsoleColor::red), \
+        		"Can't write '%d' to servo %d. Setup safe position failed!",  \
+        		buffer[2], buffer[1]); \
+	}
 
 void ServoRobot::setStartPosition(){
 	unsigned char buffer[3];
 	buffer[0] = 0xFF;
 
-	for (unsigned char i = 0; i < start_position.size(); ++i)
-	{
-		buffer[1] = i+1;
-		buffer[2] = start_position[i];
-		if (!SP->WriteData(buffer, 3)) {
-			throw new Error(ConsoleColor(ConsoleColor::red),
-            		"Can't write '%d' to servo %d. Setup start position failed!", 
-            		buffer[2], buffer[1]);
-		}
-	}
+	WRITE_POS_TO_SERVO(5, start_position);
+	Sleep(25);
+	WRITE_POS_TO_SERVO(3, start_position);
+	Sleep(25);
+	WRITE_POS_TO_SERVO(1, start_position);
+	WRITE_POS_TO_SERVO(2, start_position);
+	WRITE_POS_TO_SERVO(4, start_position);
+	WRITE_POS_TO_SERVO(6, start_position);
 };
-void ServoRobot::setSafePosition(){
+
+
+void ServoRobot::setSafePosition(unsigned char command){
 	unsigned char buffer[3];
-	buffer[0] = 0xFF;
+	buffer[0] = command;
 
 	for (unsigned char i = 0; i < safe_position.size(); ++i)
 	{
@@ -340,7 +349,7 @@ void ServoRobot::setSafePosition(){
             		buffer[2], buffer[1]);
 		}
 	}
-	
+
 };
 
 void ServoRobot::connect(){
@@ -353,6 +362,8 @@ void ServoRobot::connect(){
 	}
 
 	try{
+		setSafePosition(254); // only set safe values
+		Sleep(150);
 		setStartPosition();
 	} catch(Error *e){
 		throw e;

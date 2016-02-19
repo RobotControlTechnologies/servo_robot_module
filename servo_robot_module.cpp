@@ -10,7 +10,7 @@
 
 #include "error.h"
 
-#include "SerialClass.h"
+#include <SerialClass.h>
 #include "SimpleIni.h"
 
 #include "servo_robot_module.h"
@@ -119,6 +119,7 @@ int ServoRobotModule::init() {
 		// Считали по количеству осей граничные значения для серв
 		std::vector<ServoLimits> servo_limits;
 		std::vector<unsigned char> start_position;
+		std::vector<unsigned char> safe_position;
 		for (int i = 1; i < COUNT_AXIS+1; ++i)
 		{
 			Error *_error = new Error;
@@ -127,6 +128,7 @@ int ServoRobotModule::init() {
 			int max;
 			int min;
 			int start_pos;
+			int safe_pos;
 			try {
 				
 				try{
@@ -170,6 +172,19 @@ int ServoRobotModule::init() {
 					_error->append(new Error(ConsoleColor(ConsoleColor::red),
 		                    		"Start position is out of limits"));
 				}
+
+				// Тепеь считываем безопасное положение положения серв
+				try{
+					safe_pos = getIniValueInt(&ini, "safe_position", str.c_str());
+				} catch (Error *e){
+					_error->append(e);
+				}
+				// Сравниваем
+				if (safe_pos < min || safe_pos > max)
+				{
+					_error->append(new Error(ConsoleColor(ConsoleColor::red),
+		                    		"Safe position is out of limits"));
+				}
 				_error->checkSelf();
 			} catch (Error *e){
 				init_error->append(new Error(e, ConsoleColor(ConsoleColor::red), "%s errors:",
@@ -179,6 +194,7 @@ int ServoRobotModule::init() {
 
 			servo_limits.push_back(ServoLimits(i, min, max));
 			start_position.push_back(start_pos);
+			safe_position.push_back(safe_pos);
 		}
 
 		init_error->checkSelf();
@@ -192,12 +208,15 @@ int ServoRobotModule::init() {
 			str += std::to_string(i);
 			std::string port(getIniValueChar(&ini, "main", str.c_str()));
 
-			ServoRobot *servo_robot = new ServoRobot(port, COUNT_AXIS, servo_limits, start_position);
+			ServoRobot *servo_robot 
+				= new ServoRobot(port, COUNT_AXIS, servo_limits, 
+								 start_position, safe_position);
 			aviable_connections.push_back(servo_robot);
 		}
 	} catch(Error *e) {
 		colorPrintf(ConsoleColor(ConsoleColor::red), "Error(s): %s",
                     e->emit().c_str());
+		printf("%s\n", e->emit().c_str());
 	    delete e;
 		return 1;
 	}
@@ -279,6 +298,7 @@ void ServoRobotModule::destroy() {
 		delete robot_axis[j];
 	}
 	delete[] robot_functions;
+	
 	//delete[] robot_axis;
 	delete this;
 }
@@ -287,6 +307,7 @@ bool ServoRobot::isAvaliable(){
 };
 
 void ServoRobot::disconnect(){
+	setSafePosition();
 	is_aviable = true;
 };
 
@@ -296,11 +317,26 @@ void ServoRobot::setStartPosition(){
 
 	for (unsigned char i = 0; i < start_position.size(); ++i)
 	{
-		buffer[1] = i;
+		buffer[1] = i+1;
 		buffer[2] = start_position[i];
-		if(!SP->WriteData(buffer, 3)) {
+		if (!SP->WriteData(buffer, 3)) {
 			throw new Error(ConsoleColor(ConsoleColor::red),
             		"Can't write '%d' to servo %d. Setup start position failed!", 
+            		buffer[2], buffer[1]);
+		}
+	}
+};
+void ServoRobot::setSafePosition(){
+	unsigned char buffer[3];
+	buffer[0] = 0xFF;
+
+	for (unsigned char i = 0; i < safe_position.size(); ++i)
+	{
+		buffer[1] = i+1;
+		buffer[2] = safe_position[i];
+		if (!SP->WriteData(buffer, 3)) {
+			throw new Error(ConsoleColor(ConsoleColor::red),
+            		"Can't write '%d' to servo %d. Setup safe position failed!", 
             		buffer[2], buffer[1]);
 		}
 	}
@@ -357,7 +393,7 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 				buffer[1] = input1;
 				buffer[2] = input2;
 
-				if(!SP->WriteData(buffer, 3)) {
+				if (!SP->WriteData(buffer, 3)) {
 					throw new Error(ConsoleColor(ConsoleColor::red),
                     		"Can't write '%d' to servo %d. Sending data failed!", input2, input1);
 				}

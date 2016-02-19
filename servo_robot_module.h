@@ -15,14 +15,21 @@ class ServoRobot : public Robot {
 		int count_axis;
 		std::vector<ServoLimits> servo_limits;
 		std::vector<unsigned char> start_position;
+		std::vector<unsigned char> safe_position;
 		std::string port;
 		void colorPrintf(ConsoleColor colors, const char *mask, ...);
 		void setStartPosition();
+		void setSafePosition();
 		bool is_aviable;
     public: 
 		
-		ServoRobot(std::string port, int count_axis, std::vector<ServoLimits> servo_limits, std::vector<unsigned char> start_position) 
-			: is_aviable(true), port(port), count_axis(count_axis), servo_limits(servo_limits), start_position(start_position), SP(NULL) {}
+		ServoRobot(std::string port, int count_axis, 
+				   std::vector<ServoLimits> servo_limits,
+				   std::vector<unsigned char> start_position, 
+				   std::vector<unsigned char> safe_position) 
+			: is_aviable(true), port(port), count_axis(count_axis), 
+			  servo_limits(servo_limits), start_position(start_position),
+			  safe_position(safe_position), SP(NULL) {}
 		void prepare(colorPrintfRobot_t *colorPrintf_p,
                		 colorPrintfRobotVA_t *colorPrintfVA_p);
 		FunctionResult *executeFunction(CommandMode mode, system_value command_index,

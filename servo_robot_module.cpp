@@ -321,15 +321,6 @@ void ServoRobot::disconnect(){
 	is_aviable = true;
 };
 
-#define WRITE_POS_TO_SERVO(servo, position) \
-	buffer[1] = servo; \
-	buffer[2] = servo_limits[servo-1].position; \
-	if (!SP->WriteData(buffer, 3)) { \
-		throw new Error(ConsoleColor(ConsoleColor::red), \
-        		"Can't write '%d' to servo %d. Setup safe position failed!",  \
-        		buffer[2], buffer[1]); \
-	}
-
 void ServoRobot::setStartPosition(){
 	unsigned char buffer[3];
 	buffer[0] = Command::move_servo;

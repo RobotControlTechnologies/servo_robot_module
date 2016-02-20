@@ -19,8 +19,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 
 /* GLOBALS CONFIG */
 #define IID "RCT.Servo_robot_module_v100"
-const int COUNT_FUNCTIONS = 1;
-#define BUILD_NUMBER 2
+#define ERROR_VALUE -1
 
 
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
@@ -30,33 +29,16 @@ const int COUNT_FUNCTIONS = 1;
 	robot_axis[axis_id]->lower_value = LOWER_VALUE; \
 	robot_axis[axis_id]->name = AXIS_NAME; \
 	++axis_id;
-
-#define ADD_2F_FUNCTION(name)                         \
-  pt = new FunctionData::ParamTypes[2];               \
-  pt[0] = FunctionData::ParamTypes::FLOAT;            \
-  pt[1] = FunctionData::ParamTypes::FLOAT;            \
-  robot_functions[function_id] =                      \
-      new FunctionData(function_id + 1, 2, pt, name); \
-  function_id++;
-
-#define DEFINE_ALL_FUNCTIONS \
-	ADD_2F_FUNCTION("move_servo"); /*number, angle*/
-
-#define DEFINE_ALL_AXIS \
-	/*ADD_ROBOT_AXIS("locked", 1, 0)\
-	ADD_ROBOT_AXIS("straight", 2, 0)\
-	ADD_ROBOT_AXIS("rotation", 2, 0)*/
-
 /////////////////////////////////////////////////
 
 inline int getIniValueInt(CSimpleIniA *ini, const char *section_name, const char *key_name) {
-	const char *tmp = ini->GetValue(section_name, key_name, NULL);
-	if (!tmp) {
+	int tmp = ini->GetLongValue(section_name, key_name, ERROR_VALUE);
+	if (tmp == ERROR_VALUE) {
 		throw new Error(ConsoleColor(ConsoleColor::red),
             		"Not specified value for \"%s\" in section \"%s\"!\n",
             		 key_name, section_name);
 	}
-	return strtol(tmp, NULL, 0);
+	return tmp;
 }
 inline const char* getIniValueChar(CSimpleIniA *ini, const char *section_name, const char *key_name) {
 	const char *result = ini->GetValue(section_name, key_name, NULL);
@@ -75,22 +57,77 @@ ServoRobotModule::ServoRobotModule() {
 	mi->version = BUILD_NUMBER;
 	mi->digest = NULL;
 
+	is_prepare_failed = false;
+
 	{
-		robot_functions = new FunctionData *[COUNT_FUNCTIONS];
+		robot_functions = new FunctionData *[count_functions];
 		system_value function_id = 0;
 		FunctionData::ParamTypes *pt;
-		DEFINE_ALL_FUNCTIONS;
+
+		pt = new FunctionData::ParamTypes[2];
+		pt[0] = FunctionData::ParamTypes::FLOAT;
+		pt[1] = FunctionData::ParamTypes::FLOAT;
+		robot_functions[function_id] =  
+		    new FunctionData(function_id + 1, 2, pt, "move_servo");
+		function_id++;
 	}
-	/*{
-		robot_axis = new AxisData*[COUNT_AXIS];
-		system_value axis_id = 0;
-		DEFINE_ALL_AXIS
-	}*/
 }
 
 const struct ModuleInfo &ServoRobotModule::getModuleInfo() { return *mi; }
 
 int ServoRobotModule::init() {
+	if (is_prepare_failed) {
+		return 1;
+	}
+	return 0;
+}
+
+FunctionData** ServoRobotModule::getFunctions(unsigned int *_count_functions) {
+	(*_count_functions) = this->count_functions;
+	return robot_functions;
+}
+
+AxisData** ServoRobotModule::getAxis(unsigned int *count_axis) {
+	(*count_axis) = this->count_axis + 1;
+	return robot_axis;
+}
+
+Robot* ServoRobotModule::robotRequire() {
+	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
+		if ((*i)->isAvaliable()) {
+			try {
+				(*i)->connect();
+			} catch (Error *e){
+				colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
+                    e->emit().c_str());
+		        delete e;
+		        return NULL;
+			}
+			return (*i);
+		}
+	}
+	return NULL;
+}
+
+void ServoRobotModule::robotFree(Robot *robot) {
+	ServoRobot *servo_robot = reinterpret_cast<ServoRobot*>(robot);
+
+	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
+		if ((*i) == servo_robot) {
+			servo_robot->disconnect();
+			return;
+		}
+	}
+}
+
+void ServoRobot::prepare(colorPrintfRobot_t *colorPrintf_p,
+                         colorPrintfRobotVA_t *colorPrintfVA_p) {
+  this->colorPrintf_p = colorPrintfVA_p;
+}
+
+void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
+                               colorPrintfModuleVA_t *colorPrintfVA_p) {
+  this->colorPrintf_p = colorPrintfVA_p;
 
     std::string ConfigPath = "";
     WCHAR DllPath[MAX_PATH] = {0};
@@ -119,13 +156,11 @@ int ServoRobotModule::init() {
 							"Can't load '%s' file!\n", ConfigPath.c_str());
 		}
 		// Считали Оси
-		COUNT_AXIS = getIniValueInt(&ini, "main", "servo_count");
+		count_axis = getIniValueInt(&ini, "main", "servo_count");
 
 		// Считали по количеству осей граничные значения для серв
 		std::vector<ServoLimits> servo_limits;
-		std::vector<unsigned char> start_position;
-		std::vector<unsigned char> safe_position;
-		for (int i = 1; i < COUNT_AXIS+1; ++i)
+		for (int i = 1; i < count_axis+1; ++i)
 		{
 			Error *_error = new Error;
 			std::string str("servo_");
@@ -199,16 +234,15 @@ int ServoRobotModule::init() {
 				continue;
 			}
 
-			servo_limits.push_back(ServoLimits(i, min, max));
-			start_position.push_back(start_pos);
-			safe_position.push_back(safe_pos);
+			axis_settings.push_back(AxisMinMax(min, max, str));
+			servo_limits.push_back(ServoLimits(i, min, max, start_pos, safe_pos));
 		}
 
 		init_error->checkSelf();
 	
 		//считали количество роботов
 		int robots_count = getIniValueInt(&ini, "main", "robots_count");
-		
+
 		// Теперь по количеству роботов читаем порты
 		for (int i = 1; i <= robots_count; ++i) {
 			std::string str("robot_port_");
@@ -218,68 +252,32 @@ int ServoRobotModule::init() {
 			std::string port(getIniValueChar(&ini, "main", str.c_str()));
 
 			ServoRobot *servo_robot 
-				= new ServoRobot(port, COUNT_AXIS, servo_limits, 
-								 start_position, safe_position);
+				= new ServoRobot(port, count_axis, servo_limits);
 			aviable_connections.push_back(servo_robot);
 		}
+
 	} catch(Error *e) {
 		colorPrintf(ConsoleColor(ConsoleColor::red), "Error(s): %s",
                     e->emit().c_str());
-		printf("%s\n", e->emit().c_str());
 	    delete e;
-		return 1;
+		is_prepare_failed = true;
+		count_axis = 0;
 	}
-	return 0;
-}
 
-FunctionData** ServoRobotModule::getFunctions(unsigned int *count_functions) {
-	(*count_functions) = COUNT_FUNCTIONS;
-	return robot_functions;
-}
+	robot_axis = new AxisData*[count_axis+1];
+	system_value axis_id = 0;
 
-AxisData** ServoRobotModule::getAxis(unsigned int *count_axis) {
-	//(*count_axis) = COUNT_AXIS;
-	//return robot_axis;
-	(*count_axis) = 0;
-	return NULL;
-}
-
-Robot* ServoRobotModule::robotRequire() {
-	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
-		if ((*i)->isAvaliable()) {
-			try {
-				(*i)->connect();
-			} catch (Error *e){
-				colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
-                    e->emit().c_str());
-		        delete e;
-		        return NULL;
-			}
-			return (*i);
-		}
+	for (int i = 0; i < count_axis; ++i)
+	{
+		std::string tmp_name("serv_");
+		char buffer[32];
+		sprintf(buffer,"%d", i);
+		tmp_name += std::string(buffer);
+		ADD_ROBOT_AXIS(axis_settings[i].name.c_str(),
+					   axis_settings[i]._max, axis_settings[i]._min);
 	}
-	return NULL;
-}
 
-void ServoRobotModule::robotFree(Robot *robot) {
-	ServoRobot *servo_robot = reinterpret_cast<ServoRobot*>(robot);
-
-	for (v_connections_i i = aviable_connections.begin(); i != aviable_connections.end(); ++i) {
-		if ((*i) == servo_robot) {
-			servo_robot->disconnect();
-			return;
-		}
-	}
-}
-
-void ServoRobot::prepare(colorPrintfRobot_t *colorPrintf_p,
-                         colorPrintfRobotVA_t *colorPrintfVA_p) {
-  this->colorPrintf_p = colorPrintfVA_p;
-}
-
-void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
-                               colorPrintfModuleVA_t *colorPrintfVA_p) {
-  this->colorPrintf_p = colorPrintfVA_p;
+	ADD_ROBOT_AXIS("locked", 1, 0);
 }
 
 int ServoRobotModule::startProgram(int uniq_index) { return 0; }
@@ -299,16 +297,16 @@ void ServoRobotModule::final() {
 }
 
 void ServoRobotModule::destroy() {
-	for (int j = 0; j < COUNT_FUNCTIONS; ++j) {
+	for (int j = 0; j < count_functions; ++j) {
 		delete robot_functions[j];
 	}
-	//for (int j = 0; j < COUNT_AXIS; ++j) {
+	for (int j = 0; j < count_axis; ++j) {
 	for (int j = 0; j < 0; ++j) {
 		delete robot_axis[j];
 	}
 	delete[] robot_functions;
 	
-	//delete[] robot_axis;
+	delete[] robot_axis;
 	delete this;
 }
 bool ServoRobot::isAvaliable(){
@@ -316,13 +314,16 @@ bool ServoRobot::isAvaliable(){
 };
 
 void ServoRobot::disconnect(){
-	setSafePosition(0xFF);
+	if (SP && SP->IsConnected()){
+		setSafePosition(Command::move_servo);
+		SP->~Serial();
+	}
 	is_aviable = true;
 };
 
 #define WRITE_POS_TO_SERVO(servo, position) \
 	buffer[1] = servo; \
-	buffer[2] = position[servo-1]; \
+	buffer[2] = servo_limits[servo-1].position; \
 	if (!SP->WriteData(buffer, 3)) { \
 		throw new Error(ConsoleColor(ConsoleColor::red), \
         		"Can't write '%d' to servo %d. Setup safe position failed!",  \
@@ -331,16 +332,18 @@ void ServoRobot::disconnect(){
 
 void ServoRobot::setStartPosition(){
 	unsigned char buffer[3];
-	buffer[0] = 0xFF;
+	buffer[0] = Command::move_servo;
 
-	WRITE_POS_TO_SERVO(5, start_position);
-	Sleep(25);
-	WRITE_POS_TO_SERVO(3, start_position);
-	Sleep(25);
-	WRITE_POS_TO_SERVO(1, start_position);
-	WRITE_POS_TO_SERVO(2, start_position);
-	WRITE_POS_TO_SERVO(4, start_position);
-	WRITE_POS_TO_SERVO(6, start_position);
+	for (unsigned char i = 0; i < count_axis; ++i)
+	{
+		buffer[1] = i+1;
+		buffer[2] = servo_limits[i].start_position;
+		if (!SP->WriteData(buffer, 3)) {
+			throw new Error(ConsoleColor(ConsoleColor::red),
+            		"Can't write '%d' to servo %d. Setup safe position failed!", 
+            		buffer[2], buffer[1]);
+		}
+	}
 };
 
 
@@ -348,10 +351,10 @@ void ServoRobot::setSafePosition(unsigned char command){
 	unsigned char buffer[3];
 	buffer[0] = command;
 
-	for (unsigned char i = 0; i < safe_position.size(); ++i)
+	for (unsigned char i = 0; i < count_axis; ++i)
 	{
 		buffer[1] = i+1;
-		buffer[2] = safe_position[i];
+		buffer[2] = servo_limits[i].safe_position;
 		if (!SP->WriteData(buffer, 3)) {
 			throw new Error(ConsoleColor(ConsoleColor::red),
             		"Can't write '%d' to servo %d. Setup safe position failed!", 
@@ -362,7 +365,6 @@ void ServoRobot::setSafePosition(unsigned char command){
 };
 
 void ServoRobot::connect(){
-	printf("port %s\n",port.c_str());
 	SP = new Serial((char *)port.c_str());
 	Sleep(150);
 	if (!SP->IsConnected()){
@@ -371,7 +373,7 @@ void ServoRobot::connect(){
 	}
 
 	try{
-		setSafePosition(254); // only set safe values
+		setSafePosition(Command::write_value); // only set safe values
 		Sleep(150);
 		setStartPosition();
 	} catch(Error *e){
@@ -409,7 +411,7 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 
 				// Если прошел то разрешаем
 				unsigned char buffer[3];
-				buffer[0] = 0xFF;
+				buffer[0] = Command::move_servo;
 				buffer[1] = input1;
 				buffer[2] = input2;
 
@@ -433,17 +435,39 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 	}
 
 	return fr;
-}
+};
 
-void ServoRobot::axisControl(system_value axis_index, variable_value value) {}
+void ServoRobot::axisControl(system_value axis_index, variable_value value) {
 
-ServoRobot::~ServoRobot() {
-	if (SP) {
-		if (SP->IsConnected())
-		{
-			SP->~Serial();
-		}
+	if (axis_index == 7)
+	{
+		is_locked = !value;
 	}
+
+  switch (axis_index) {
+    case 1:
+    case 2:
+    case 3:
+    case 4:
+    case 5:
+    case 6: {
+    	if (!is_locked)
+    	{
+    		unsigned char buffer[3];
+			buffer[0] = Command::move_servo;
+			buffer[1] = axis_index;
+			buffer[2] = value;
+			SP->WriteData(buffer, 3);
+    	}
+    	break;
+    }
+    default:{
+    	break;
+    }
+  }
+  colorPrintf(ConsoleColor(ConsoleColor::green), "change axis value: %s = %f\n",
+              name, value);
+
 }
 
 void ServoRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {

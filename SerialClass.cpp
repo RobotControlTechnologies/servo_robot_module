@@ -1,6 +1,8 @@
 
 //#define __STRICT_ANSI__
 
+#define ERROR_VALUE -1
+
 #include "SerialClass.h"
 #include "stdio.h"
 Serial::Serial(char *portName)
@@ -8,6 +10,7 @@ Serial::Serial(char *portName)
 	//We're not yet connected
 	this->connected = false;
 
+#ifdef _WIN32
 	//Try to connect to the given port throuh CreateFile
 	this->hSerial = CreateFileA(portName,
 		GENERIC_READ | GENERIC_WRITE,
@@ -69,7 +72,42 @@ Serial::Serial(char *portName)
 			}
 		}
 	}
+#else 
+	com = open( portName, O_RDWR| O_NOCTTY );
+	memset (&tty, 0, sizeof tty);
 
+	/* Error Handling */
+	if ( tcgetattr ( com, &tty ) != 0 ) {
+	   std::cout << "Error " << errno << " from tcgetattr: " << strerror(errno) << std::endl;
+	}
+
+	/* Save old tty parameters */
+	tty_old = tty;
+
+	/* Set Baud Rate */
+	cfsetospeed (&tty, (speed_t)B9600);
+	cfsetispeed (&tty, (speed_t)B9600);
+
+	/* Setting other Port Stuff */
+	tty.c_cflag     &=  ~PARENB;            // Make 8n1
+	tty.c_cflag     &=  ~CSTOPB;
+	tty.c_cflag     &=  ~CSIZE;
+	tty.c_cflag     |=  CS8;
+
+	tty.c_cflag     &=  ~CRTSCTS;           // no flow control
+	tty.c_cc[VMIN]   =  1;                  // read doesn't block
+	tty.c_cc[VTIME]  =  5;                  // 0.5 seconds read timeout
+	tty.c_cflag     |=  CREAD | CLOCAL;     // turn on READ & ignore ctrl lines
+
+	/* Make raw */
+	cfmakeraw(&tty);
+
+	/* Flush Port, then applies attributes */
+	tcflush( com, TCIFLUSH );
+	if ( tcsetattr ( com, TCSANOW, &tty ) != 0) {
+	   printf("Error %d from tcsetattr\n", errno );
+	}
+#endif
 }
 
 Serial::~Serial()
@@ -119,12 +157,12 @@ int Serial::ReadData(char *buffer, unsigned int nbChar)
 
 	//If nothing has been read, or that an error was detected return 0
 	return 0;
-
 }
 
 
 bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 {
+#ifdef _WIN32
 	DWORD bytesSend;
 
 	//Try to write the buffer on the Serial port
@@ -137,6 +175,14 @@ bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 	}
 	else
 		return true;
+#else
+	unsigned char *buffer;
+	if (write( com, buffer, nbChar ) == ERROR_VALUE){
+		printf("Error write data: %d\n", errno);
+		return false;
+	};
+	return true;
+#endif
 }
 
 bool Serial::IsConnected()

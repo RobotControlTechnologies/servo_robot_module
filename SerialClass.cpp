@@ -1,35 +1,21 @@
-#include "SerialClass.h"
 
+//#define __STRICT_ANSI__
+
+#include "SerialClass.h"
+#include "stdio.h"
 Serial::Serial(char *portName)
 {
 	//We're not yet connected
 	this->connected = false;
 
-/*
-	printf("Try to connect to the given port throuh CreateFile\n");
-	wchar_t wtext[20];
-	size_t *bytes_len= NULL;
-	*bytes_len = (strlen(portName) + 1);
-	mbstowcs_s(bytes_len, wtext, (const char*)portName, (size_t)20);//Plus null
-	LPCWSTR ptr = wtext;
-*/
-
-	size_t origsize = strlen(portName) + 1;
-	const size_t newsize = origsize;
-	size_t convertedChars = 0;
-	wchar_t wcstring[5];
-	wsprintf(wcstring, L"%S", portName);
-
 	//Try to connect to the given port throuh CreateFile
-	printf("Try to connect to the given port throuh CreateFile\n");
-	this->hSerial = CreateFile(wcstring,
+	this->hSerial = CreateFileA(portName,
 		GENERIC_READ | GENERIC_WRITE,
 		0,
 		NULL,
 		OPEN_EXISTING,
 		FILE_ATTRIBUTE_NORMAL,
 		NULL);
-	printf("File Created\n");
 	//Check if the connection was successfull
 	if (this->hSerial == INVALID_HANDLE_VALUE)
 	{
@@ -137,7 +123,7 @@ int Serial::ReadData(char *buffer, unsigned int nbChar)
 }
 
 
-bool Serial::WriteData(char *buffer, unsigned int nbChar)
+bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 {
 	DWORD bytesSend;
 

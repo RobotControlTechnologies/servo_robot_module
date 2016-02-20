@@ -10,7 +10,7 @@
 
 #include "error.h"
 
-#include <SerialClass.h>
+#include "SerialClass.h"
 #include "SimpleIni.h"
 
 #include "servo_robot_module.h"
@@ -92,16 +92,21 @@ const struct ModuleInfo &ServoRobotModule::getModuleInfo() { return *mi; }
 
 int ServoRobotModule::init() {
 
-	WCHAR DllPath[MAX_PATH] = {0};
-	GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, _countof(DllPath));
+    std::string ConfigPath = "";
+    WCHAR DllPath[MAX_PATH] = {0};
+    GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, (DWORD)MAX_PATH);
 
-	WCHAR *tmp = wcsrchr(DllPath, L'\\');
-	WCHAR ConfigPath[MAX_PATH] = {0};
-	
-	size_t path_len = tmp - DllPath;
+    WCHAR *tmp = wcsrchr(DllPath, L'\\');
+    WCHAR wConfigPath[MAX_PATH] = {0};
 
-	wcsncpy(ConfigPath, DllPath, path_len);
-	wcscat(ConfigPath, L"\\config.ini");
+    size_t path_len = tmp - DllPath;
+
+    wcsncpy(wConfigPath, DllPath, path_len);
+    wcscat(wConfigPath, L"\\config.ini");
+
+    char c_ConfigPath[MAX_PATH] = {0};
+    wcstombs(c_ConfigPath, wConfigPath, sizeof(c_ConfigPath));
+    ConfigPath.append(c_ConfigPath);
 
 	CSimpleIniA ini;
 	ini.SetMultiKey(true);
@@ -109,9 +114,9 @@ int ServoRobotModule::init() {
 
 	Error *init_error = new Error;
 	try{
-		if (ini.LoadFile(ConfigPath) < 0) {
+		if (ini.LoadFile(ConfigPath.c_str()) < 0) {
 			throw new Error(ConsoleColor(ConsoleColor::red),
-							"Can't load '%s' file!\n", ConfigPath);
+							"Can't load '%s' file!\n", ConfigPath.c_str());
 		}
 		// Считали Оси
 		COUNT_AXIS = getIniValueInt(&ini, "main", "servo_count");
@@ -124,7 +129,9 @@ int ServoRobotModule::init() {
 		{
 			Error *_error = new Error;
 			std::string str("servo_");
-			str += std::to_string(i);
+			char buffer[32];
+			sprintf(buffer,"%d", i);
+			str += std::string(buffer);
 			int max;
 			int min;
 			int start_pos;
@@ -205,7 +212,9 @@ int ServoRobotModule::init() {
 		// Теперь по количеству роботов читаем порты
 		for (int i = 1; i <= robots_count; ++i) {
 			std::string str("robot_port_");
-			str += std::to_string(i);
+			char buffer[32];
+			sprintf(buffer,"%d", i);
+			str += std::string(buffer);
 			std::string port(getIniValueChar(&ini, "main", str.c_str()));
 
 			ServoRobot *servo_robot 

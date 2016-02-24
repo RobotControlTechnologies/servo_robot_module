@@ -171,7 +171,6 @@ int Serial::ReadData(char *buffer, unsigned int nbChar)
 
 bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 {
-	printf("Try to write\n");
 #ifdef _WIN32
 	DWORD bytesSend;
 

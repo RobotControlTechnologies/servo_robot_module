@@ -110,6 +110,8 @@ Robot* ServoRobotModule::robotRequire() {
 			try {
 				(*i)->connect();
 			} catch (Error *e){
+				printf("Error: %s",
+                    e->emit().c_str());
 				colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
                     e->emit().c_str());
 		        delete e;

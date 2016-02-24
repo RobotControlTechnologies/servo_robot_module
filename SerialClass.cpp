@@ -80,7 +80,7 @@ Serial::Serial(char *portName)
 
 	/* Error Handling */
 	if ( tcgetattr ( com, &tty ) != 0 ) {
-	   printf("Error  %d from tcgetattr: %s\n", errno, strerror(errno));
+	   printf("Error handling  %d from tcgetattr: %s\n", errno, strerror(errno));
 	}
 
 	/* Save old tty parameters */
@@ -88,7 +88,7 @@ Serial::Serial(char *portName)
 
 	/* Set Baud Rate */
 	cfsetospeed (&tty, (speed_t)B9600);
-	cfsetispeed (&tty, (speed_t)B9600);
+	//cfsetispeed (&tty, (speed_t)B9600);
 
 	/* Setting other Port Stuff */
 	tty.c_cflag     &=  ~PARENB;            // Make 8n1
@@ -107,8 +107,9 @@ Serial::Serial(char *portName)
 	/* Flush Port, then applies attributes */
 	tcflush( com, TCIFLUSH );
 	if ( tcsetattr ( com, TCSANOW, &tty ) != 0) {
-	   printf("Error %d from tcsetattr\n", errno );
+	   printf("Error apply attributes %d from tcsetattr\n", errno );
 	}
+	this->connected = true;
 #endif
 }
 
@@ -170,6 +171,7 @@ int Serial::ReadData(char *buffer, unsigned int nbChar)
 
 bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 {
+	printf("Try to write\n");
 #ifdef _WIN32
 	DWORD bytesSend;
 

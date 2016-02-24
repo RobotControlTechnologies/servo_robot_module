@@ -5,6 +5,8 @@
 
 #include "SerialClass.h"
 #include "stdio.h"
+#include <string.h>
+#include <errno.h>
 Serial::Serial(char *portName)
 {
 	//We're not yet connected
@@ -78,7 +80,7 @@ Serial::Serial(char *portName)
 
 	/* Error Handling */
 	if ( tcgetattr ( com, &tty ) != 0 ) {
-	   std::cout << "Error " << errno << " from tcgetattr: " << strerror(errno) << std::endl;
+	   printf("Error  %d from tcgetattr: %s\n", errno, strerror(errno));
 	}
 
 	/* Save old tty parameters */
@@ -117,13 +119,18 @@ Serial::~Serial()
 	{
 		//We're no longer connected
 		this->connected = false;
+#ifdef _WIN32
 		//Close the serial handler
 		CloseHandle(this->hSerial);
+#else
+		close (com);
+#endif
 	}
 }
 
 int Serial::ReadData(char *buffer, unsigned int nbChar)
 {
+#ifdef _WIN32
 	//Number of bytes we'll have read
 	DWORD bytesRead;
 	//Number of bytes we'll really ask to read
@@ -156,6 +163,7 @@ int Serial::ReadData(char *buffer, unsigned int nbChar)
 	}
 
 	//If nothing has been read, or that an error was detected return 0
+#endif
 	return 0;
 }
 
@@ -176,7 +184,7 @@ bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar)
 	else
 		return true;
 #else
-	unsigned char *buffer;
+	(unsigned char) *buffer;
 	if (write( com, buffer, nbChar ) == ERROR_VALUE){
 		printf("Error write data: %d\n", errno);
 		return false;

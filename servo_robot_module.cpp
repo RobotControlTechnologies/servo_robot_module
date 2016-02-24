@@ -1,9 +1,20 @@
+
+#ifdef _WIN32
 #include <windows.h>
+#include <process.h>
+#else
+#include <stdint.h>
+#include <unistd.h>
+#include <cstdarg>
+#include <cstddef>
+#include <fcntl.h>
+#include <dlfcn.h>
+#endif
 #include <stdio.h>
 #include <stdlib.h>
 #include <string>
 #include <vector>
-#include <process.h>
+
 
 #include "module.h"
 #include "robot_module.h"
@@ -15,8 +26,9 @@
 
 #include "servo_robot_module.h"
 
+#ifdef _WIN32
 EXTERN_C IMAGE_DOS_HEADER __ImageBase;
-
+#endif
 /* GLOBALS CONFIG */
 #define IID "RCT.Servo_robot_module_v100"
 #define ERROR_VALUE -1
@@ -129,21 +141,35 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
                                colorPrintfModuleVA_t *colorPrintfVA_p) {
   this->colorPrintf_p = colorPrintfVA_p;
 
-    std::string ConfigPath = "";
-    WCHAR DllPath[MAX_PATH] = {0};
-    GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, (DWORD)MAX_PATH);
+     std::string ConfigPath = "";
+#ifdef _WIN32
+  WCHAR DllPath[MAX_PATH] = {0};
+  GetModuleFileNameW((HINSTANCE)&__ImageBase, DllPath, (DWORD)MAX_PATH);
 
-    WCHAR *tmp = wcsrchr(DllPath, L'\\');
-    WCHAR wConfigPath[MAX_PATH] = {0};
+  WCHAR *tmp = wcsrchr(DllPath, L'\\');
+  WCHAR wConfigPath[MAX_PATH] = {0};
 
-    size_t path_len = tmp - DllPath;
+  size_t path_len = tmp - DllPath;
 
-    wcsncpy(wConfigPath, DllPath, path_len);
-    wcscat(wConfigPath, L"\\config.ini");
+  wcsncpy(wConfigPath, DllPath, path_len);
+  wcscat(wConfigPath, L"\\config.ini");
 
-    char c_ConfigPath[MAX_PATH] = {0};
-    wcstombs(c_ConfigPath, wConfigPath, sizeof(c_ConfigPath));
-    ConfigPath.append(c_ConfigPath);
+  char c_ConfigPath[MAX_PATH] = {0};
+  wcstombs(c_ConfigPath, wConfigPath, sizeof(c_ConfigPath));
+  ConfigPath.append(c_ConfigPath);
+#else
+  Dl_info PathToSharedObject;
+  void *pointer = reinterpret_cast<void *>(getRobotModuleObject);
+  dladdr(pointer, &PathToSharedObject);
+  std::string dltemp(PathToSharedObject.dli_fname);
+
+  int dlfound = dltemp.find_last_of("/");
+
+  dltemp = dltemp.substr(0, dlfound);
+  dltemp += "/config.ini";
+
+  ConfigPath.assign(dltemp.c_str());
+#endif
 
 	CSimpleIniA ini;
 	ini.SetMultiKey(true);
@@ -301,14 +327,14 @@ void ServoRobotModule::destroy() {
 		delete robot_functions[j];
 	}
 	for (int j = 0; j < count_axis; ++j) {
-	for (int j = 0; j < 0; ++j) {
 		delete robot_axis[j];
 	}
 	delete[] robot_functions;
 	
 	delete[] robot_axis;
 	delete this;
-}
+};
+
 bool ServoRobot::isAvaliable(){
 	return is_aviable;
 };
@@ -357,7 +383,11 @@ void ServoRobot::setSafePosition(unsigned char command){
 
 void ServoRobot::connect(){
 	SP = new Serial((char *)port.c_str());
+#ifdef _WIN32
 	Sleep(150);
+#else
+	usleep(150);
+#endif
 	if (!SP->IsConnected()){
 		throw new Error(ConsoleColor(ConsoleColor::red),
                     "Can't connect to robot");
@@ -365,7 +395,11 @@ void ServoRobot::connect(){
 
 	try{
 		setSafePosition(Command::write_value); // only set safe values
+#ifdef _WIN32
 		Sleep(150);
+#else
+		usleep(150);
+#endif
 		setStartPosition();
 	} catch(Error *e){
 		throw e;
@@ -456,9 +490,8 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
     	break;
     }
   }
-  colorPrintf(ConsoleColor(ConsoleColor::green), "change axis value: %s = %f\n",
-              name, value);
-
+  colorPrintf(ConsoleColor(ConsoleColor::green), "change axis value: %d = %f\n",
+              axis_index, value);
 }
 
 void ServoRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {

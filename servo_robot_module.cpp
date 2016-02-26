@@ -32,6 +32,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 /* GLOBALS CONFIG */
 #define IID "RCT.Servo_robot_module_v100"
 #define ERROR_VALUE -1
+#define ADDITIONAL_AXIS_COUNT 1 // add lock axis
 
 
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
@@ -100,7 +101,7 @@ FunctionData** ServoRobotModule::getFunctions(unsigned int *_count_functions) {
 }
 
 AxisData** ServoRobotModule::getAxis(unsigned int *count_axis) {
-	(*count_axis) = this->count_axis + 1;
+	(*count_axis) = this->count_axis;
 	return robot_axis;
 }
 
@@ -110,8 +111,6 @@ Robot* ServoRobotModule::robotRequire() {
 			try {
 				(*i)->connect();
 			} catch (Error *e){
-				printf("Error: %s",
-                    e->emit().c_str());
 				colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
                     e->emit().c_str());
 		        delete e;
@@ -184,11 +183,12 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 							"Can't load '%s' file!\n", ConfigPath.c_str());
 		}
 		// Считали Оси
-		count_axis = getIniValueInt(&ini, "main", "servo_count");
+		int servo_count = getIniValueInt(&ini, "main", "servo_count");
+		count_axis = servo_count + ADDITIONAL_AXIS_COUNT;
 
 		// Считали по количеству осей граничные значения для серв
 		std::vector<ServoLimits> servo_limits;
-		for (int i = 1; i < count_axis+1; ++i)
+		for (int i = 1; i < servo_count+1; ++i)
 		{
 			Error *_error = new Error;
 			std::string str("servo_");
@@ -292,19 +292,15 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 		count_axis = 0;
 	}
 
-	robot_axis = new AxisData*[count_axis+1];
+	// ADD AXIS
+	robot_axis = new AxisData*[count_axis];
 	system_value axis_id = 0;
 
-	for (int i = 0; i < count_axis; ++i)
+	for (int i = 0; i < axis_settings.size(); ++i)
 	{
-		std::string tmp_name("serv_");
-		char buffer[32];
-		sprintf(buffer,"%d", i);
-		tmp_name += std::string(buffer);
 		ADD_ROBOT_AXIS(axis_settings[i].name.c_str(),
 					   axis_settings[i]._max, axis_settings[i]._min);
 	}
-
 	ADD_ROBOT_AXIS("locked", 1, 0);
 }
 
@@ -353,7 +349,7 @@ void ServoRobot::setStartPosition(){
 	unsigned char buffer[3];
 	buffer[0] = Command::move_servo;
 
-	for (unsigned char i = 0; i < count_axis; ++i)
+	for (unsigned char i = 0; i < servo_limits.size(); ++i)
 	{
 		buffer[1] = i+1;
 		buffer[2] = servo_limits[i].start_position;
@@ -370,7 +366,7 @@ void ServoRobot::setSafePosition(unsigned char command){
 	unsigned char buffer[3];
 	buffer[0] = command;
 
-	for (unsigned char i = 0; i < count_axis; ++i)
+	for (unsigned char i = 0; i < servo_limits.size(); ++i)
 	{
 		buffer[1] = i+1;
 		buffer[2] = servo_limits[i].safe_position;
@@ -384,6 +380,7 @@ void ServoRobot::setSafePosition(unsigned char command){
 };
 
 void ServoRobot::connect(){
+	if (SP){ SP->~Serial();}
 	SP = new Serial((char *)port.c_str());
 #ifdef _WIN32
 	Sleep(150);
@@ -391,6 +388,7 @@ void ServoRobot::connect(){
 	usleep(150);
 #endif
 	if (!SP->IsConnected()){
+		SP->~Serial();
 		throw new Error(ConsoleColor(ConsoleColor::red),
                     "Can't connect to robot");
 	}
@@ -404,7 +402,8 @@ void ServoRobot::connect(){
 #endif
 		setStartPosition();
 	} catch(Error *e){
-		throw e;
+		throw new Error(e, ConsoleColor(ConsoleColor::red),
+                    "Connection error:");
 	}
 
 	is_aviable = false;
@@ -423,7 +422,7 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 				unsigned char input1 =(unsigned char) *(variable_value *)args[0];
 				unsigned char input2 =(unsigned char) *(variable_value *)args[1];
 	
-				if ((input1 > count_axis) || (input1 <= 0)) {
+				if (input1 > servo_limits.size()) {
 					throw new Error(ConsoleColor(ConsoleColor::red),
                     		"wrong axis number %d", input1);
 				}
@@ -437,12 +436,13 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 				}
 
 				// Если прошел то разрешаем
-				unsigned char buffer[3];
+				const int command_bytes = 3;
+				unsigned char buffer[command_bytes];
 				buffer[0] = Command::move_servo;
 				buffer[1] = input1;
 				buffer[2] = input2;
 
-				if (!SP->WriteData(buffer, 3)) {
+				if (!SP->WriteData(buffer, command_bytes)) {
 					throw new Error(ConsoleColor(ConsoleColor::red),
                     		"Can't write '%d' to servo %d. Sending data failed!", input2, input1);
 				}
@@ -465,12 +465,6 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode, system_value comma
 };
 
 void ServoRobot::axisControl(system_value axis_index, variable_value value) {
-
-	if (axis_index == 7)
-	{
-		is_locked = !value;
-	}
-
   switch (axis_index) {
     case 1:
     case 2:
@@ -480,13 +474,17 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
     case 6: {
     	if (!is_locked)
     	{
-    		unsigned char buffer[3];
+    		const int command_bytes = 3;
+    		unsigned char buffer[command_bytes];
 			buffer[0] = Command::move_servo;
 			buffer[1] = axis_index;
 			buffer[2] = value;
-			SP->WriteData(buffer, 3);
+			SP->WriteData(buffer, command_bytes);
     	}
     	break;
+    }
+    case 7:{
+    	is_locked = !value;
     }
     default:{
     	break;

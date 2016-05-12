@@ -16,7 +16,6 @@
 #include <vector>
 #include <limits.h>
 
-
 #include "module.h"
 #include "robot_module.h"
 

@@ -33,7 +33,7 @@ EXTERN_C IMAGE_DOS_HEADER __ImageBase;
 /* GLOBALS CONFIG */
 #define IID "RCT.Servo_robot_module_v100"
 #define ERROR_VALUE INT_MAX
-#define ADDITIONAL_AXIS_COUNT 1  // add lock axis
+#define LOCKED_AXIS 1  // add lock axis
 
 #define ADD_ROBOT_AXIS(AXIS_NAME, UPPER_VALUE, LOWER_VALUE) \
   robot_axis[axis_id] = new AxisData;                       \
@@ -72,11 +72,13 @@ ServoLimits::ServoLimits(int number, int _min, int _max, int start_position,
     _max(_max),
     start_position(start_position),
     safe_position(safe_position),
-    increment(increment){
-  current_position = start_position;
-};
+    increment(increment),
+    current_position(start_position){};
 
-ServoRobotModule::ServoRobotModule() {
+ServoRobotModule::ServoRobotModule()
+  : robot_axis(NULL),
+    count_axis(LOCKED_AXIS),
+    colorPrintf_p(NULL){
   mi = new ModuleInfo;
   mi->uid = IID;
   mi->mode = ModuleInfo::Modes::PROD;
@@ -138,7 +140,6 @@ Robot *ServoRobotModule::robotRequire() {
 
 void ServoRobotModule::robotFree(Robot *robot) {
   ServoRobot *servo_robot = reinterpret_cast<ServoRobot *>(robot);
-
   for (v_connections_i i = aviable_connections.begin();
        i != aviable_connections.end(); ++i) {
     if ((*i) == servo_robot) {
@@ -199,7 +200,7 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
     }
     // Считали Оси
     int servo_count = getIniValueInt(&ini, "main", "servo_count");
-    count_axis = servo_count + ADDITIONAL_AXIS_COUNT;
+    count_axis = count_axis + servo_count;
 
     // Считали по количеству осей граничные значения для серв
     std::vector<ServoLimits> servo_limits;
@@ -335,7 +336,7 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
   robot_axis = new AxisData *[count_axis];
   system_value axis_id = 0;
 
-  for (int i = 0; i < axis_settings.size(); ++i) {
+  for (unsigned int i = 0; i < axis_settings.size(); ++i) {
     ADD_ROBOT_AXIS(axis_settings[i].name.c_str(), axis_settings[i]._max,
                    axis_settings[i]._min);
   }
@@ -500,7 +501,7 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
 };
 
 void ServoRobot::axisControl(system_value axis_index, variable_value value) {
-  const int locked_index = servo_data.size() + 1;
+  const int locked_index = servo_data.size() + LOCKED_AXIS;
   if (axis_index>locked_index) {
     colorPrintf(ConsoleColor(ConsoleColor::red), "Wrong axis Index: %d", axis_index);
     return;

@@ -32,7 +32,8 @@ class ServoRobot : public Robot {
  public:
   ServoRobot(std::string port, int count_axis,
              std::vector<ServoLimits> servo_data)
-      : SP(NULL),
+      : colorPrintf_p(NULL),
+        SP(NULL),
         count_axis(count_axis),
         servo_data(servo_data),
         port(port),

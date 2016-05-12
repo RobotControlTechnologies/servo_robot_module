@@ -108,7 +108,6 @@ Serial::~Serial() {
     close(com);
 #endif
   }
-  delete this;
 }
 
 bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar) {

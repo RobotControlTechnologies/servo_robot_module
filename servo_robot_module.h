@@ -2,18 +2,15 @@
 #define SERVO_ROBOT_MODULE_H
 
 struct ServoLimits {
-  int start_position;
-  int safe_position;
+  int servo_number;
   int _min;
   int _max;
-  int servo_number;
+  int start_position;
+  int safe_position;
+  bool increment;
+  int current_position; 
   ServoLimits(int number, int _min, int _max, int start_position,
-              int safe_position)
-      : servo_number(number),
-        _min(_min),
-        _max(_max),
-        start_position(start_position),
-        safe_position(safe_position){};
+              int safe_position, bool increment);
 };
 
 enum Command { write_value = 0xFE, move_servo = 0xFF };
@@ -24,22 +21,22 @@ class ServoRobot : public Robot {
   Serial *SP;
   int count_axis;
 
-  std::vector<ServoLimits> servo_limits;
+  std::vector<ServoLimits> servo_data;
   std::string port;
-  void colorPrintf(ConsoleColor colors, const char *mask, ...);
-  void setStartPosition();
-  void setSafePosition(unsigned char command);
   bool is_aviable;
   bool is_locked;
 
+  void colorPrintf(ConsoleColor colors, const char *mask, ...);
+  void setStartPosition();
+  void setSafePosition(unsigned char command);
  public:
   ServoRobot(std::string port, int count_axis,
-             std::vector<ServoLimits> servo_limits)
-      : is_aviable(true),
-        port(port),
+             std::vector<ServoLimits> servo_data)
+      : SP(NULL),
         count_axis(count_axis),
-        servo_limits(servo_limits),
-        SP(NULL),
+        servo_data(servo_data),
+        port(port),
+        is_aviable(true),
         is_locked(true) {}
   void prepare(colorPrintfRobot_t *colorPrintf_p,
                colorPrintfRobotVA_t *colorPrintfVA_p);

@@ -299,11 +299,10 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 
       if (increment) {
         axis_settings.push_back(AxisMinMax(low, top, servo_name));
-        servo_limits.push_back(ServoLimits(i, min, max, start_pos, safe_pos, increment));
       } else{
         axis_settings.push_back(AxisMinMax(min, max, servo_name));
-        servo_limits.push_back(ServoLimits(i, min, max, start_pos, safe_pos, increment));
       }
+      servo_limits.push_back(ServoLimits(i, min, max, start_pos, safe_pos, increment));
     }
 
     init_error->checkSelf();

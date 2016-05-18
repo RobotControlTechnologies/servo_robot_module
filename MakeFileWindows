@@ -53,4 +53,4 @@ servo_robot_module.o:  servo_robot_module.cpp error.o
 module: SerialClass.o servo_robot_module.o error.o
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/error.o ${OBJECTDIR}/servo_robot_module.o ${OBJECTDIR}/SerialClass.o -o ${OBJECTDIR}/fanuc_module_$(FILENAME_FIX).dll 
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/error.o ${OBJECTDIR}/servo_robot_module.o ${OBJECTDIR}/SerialClass.o -o ${OBJECTDIR}/servo_module_$(FILENAME_FIX).dll 

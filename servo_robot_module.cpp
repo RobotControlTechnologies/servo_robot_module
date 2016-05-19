@@ -125,13 +125,12 @@ Robot *ServoRobotModule::robotRequire() {
     if ((*i)->isAvaliable()) {
       try {
         (*i)->connect();
+        return (*i);
       } catch (Error *e) {
         colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
                     e->emit().c_str());
         delete e;
-        continue;
       }
-      return (*i);
     }
   }
   return NULL;

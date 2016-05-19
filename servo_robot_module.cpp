@@ -189,7 +189,6 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 
   CSimpleIniA ini;
   ini.SetMultiKey(true);
-  // Считали файл
 
   Error *init_error = new Error;
   try {
@@ -197,11 +196,9 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
       throw new Error(ConsoleColor(ConsoleColor::red),
                       "Can't load '%s' file!\n", ConfigPath.c_str());
     }
-    // Считали Оси
     int servo_count = getIniValueInt(&ini, "main", "servo_count");
     count_axis = count_axis + servo_count;
 
-    // Считали по количеству осей граничные значения для серв
     std::vector<ServoLimits> servo_limits;
     for (int i = 1; i < servo_count + 1; ++i) {
       Error *_error = new Error;
@@ -267,25 +264,21 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
           }
         }
 
-        // Тепеь считываем начальные положения серв
         try {
           start_pos = getIniValueInt(&ini, "start_position", servo_name.c_str());
         } catch (Error *e) {
           _error->append(e);
         }
-        // Сравниваем
         if (start_pos < min || start_pos > max) {
           _error->append(new Error(ConsoleColor(ConsoleColor::red),
                                    "Start position is out of limits"));
         }
 
-        // Тепеь считываем безопасное положение серв
         try {
           safe_pos = getIniValueInt(&ini, "safe_position", servo_name.c_str());
         } catch (Error *e) {
           _error->append(e);
         }
-        // Сравниваем
         if (safe_pos < min || safe_pos > max) {
           _error->append(new Error(ConsoleColor(ConsoleColor::red),
                                    "Safe position is out of limits"));
@@ -307,10 +300,19 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 
     init_error->checkSelf();
 
-    //считали количество роботов
+    // ADD AXIS
+    robot_axis = new AxisData *[count_axis];
+    system_value axis_id = 0;
+
+    for (unsigned int i = 0; i < axis_settings.size(); ++i) {
+      ADD_ROBOT_AXIS(axis_settings[i].name.c_str(), axis_settings[i]._max,
+                     axis_settings[i]._min);
+    }
+    ADD_ROBOT_AXIS("locked", 1, 0);
+
+    // ADD ROBOTS
     int robots_count = getIniValueInt(&ini, "main", "robots_count");
 
-    // Теперь по количеству роботов читаем порты
     for (int i = 1; i <= robots_count; ++i) {
       std::string robot_port("robot_port_");
       char buffer[32];
@@ -329,16 +331,6 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
     is_prepare_failed = true;
     count_axis = 0;
   }
-
-  // ADD AXIS
-  robot_axis = new AxisData *[count_axis];
-  system_value axis_id = 0;
-
-  for (unsigned int i = 0; i < axis_settings.size(); ++i) {
-    ADD_ROBOT_AXIS(axis_settings[i].name.c_str(), axis_settings[i]._max,
-                   axis_settings[i]._min);
-  }
-  ADD_ROBOT_AXIS("locked", 1, 0);
 }
 
 int ServoRobotModule::startProgram(int uniq_index) { return 0; }
@@ -470,7 +462,6 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
                           input1, _min, _max);
         }
 
-        // Если прошел то разрешаем
         const int command_bytes = 3;
         unsigned char buffer[command_bytes];
         buffer[0] = Command::move_servo;
@@ -494,12 +485,10 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
     fr = new FunctionResult(FunctionResult::Types::EXCEPTION, 0);
     delete e;
   }
-
   return fr;
 };
 
 void ServoRobot::axisControl(system_value axis_index, variable_value value) {
-  const int locked_index = servo_data.size() + LOCKED_AXIS;
   if (axis_index>locked_index) {
     colorPrintf(ConsoleColor(ConsoleColor::red), "Wrong axis Index: %d", axis_index);
     return;
@@ -507,7 +496,7 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
     is_locked = !value;
   } else {
     if (!is_locked) {
-        const int servo_number = axis_index - 1; 
+        const int servo_number = axis_index - 1;
         if (servo_data[servo_number].increment){
           value = servo_data[servo_number].current_position + value;
           if (value > servo_data[servo_number]._max || value < servo_data[servo_number]._min){
@@ -516,13 +505,17 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
           }
           servo_data[servo_number].current_position = value;
         }
-
         const int command_bytes = 3;
         unsigned char buffer[command_bytes];
         buffer[0] = Command::move_servo;
         buffer[1] = axis_index;
-        buffer[2] = value;
-        SP->WriteData(buffer, command_bytes);
+        buffer[2] = (unsigned char) value;  
+        if (!SP->WriteData(buffer, command_bytes)) {
+          colorPrintf(ConsoleColor(ConsoleColor::green), 
+                          "Can't write '%d' to servo %d. Sending data failed!",
+                          value, axis_index);
+          return;
+        }
       }
   }
   colorPrintf(ConsoleColor(ConsoleColor::green), "change axis value: %d = %f\n",

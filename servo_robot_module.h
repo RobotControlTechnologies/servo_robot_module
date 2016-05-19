@@ -19,7 +19,7 @@ class ServoRobot : public Robot {
  private:
   colorPrintfRobotVA_t *colorPrintf_p;
   Serial *SP;
-  int count_axis;
+  const int locked_index;
 
   std::vector<ServoLimits> servo_data;
   std::string port;
@@ -30,11 +30,11 @@ class ServoRobot : public Robot {
   void setStartPosition();
   void setSafePosition(unsigned char command);
  public:
-  ServoRobot(std::string port, int count_axis,
+  ServoRobot(std::string port, int locked_index,
              std::vector<ServoLimits> servo_data)
       : colorPrintf_p(NULL),
         SP(NULL),
-        count_axis(count_axis),
+        locked_index(locked_index),
         servo_data(servo_data),
         port(port),
         is_aviable(true),

@@ -24,7 +24,7 @@ Serial::Serial(char *portName) {
              portName);
 
     } else {
-      printf("ERROR!!!");
+      printf("UNKNOWN ERROR!!!");
     }
   } else {
     // If connected we try to set the comm parameters
@@ -40,9 +40,21 @@ Serial::Serial(char *portName) {
       dcbSerialParams.ByteSize = 8;
       dcbSerialParams.StopBits = ONESTOPBIT;
       dcbSerialParams.Parity = NOPARITY;
-      // Setting the DTR to Control_Enable ensures that the Arduino is properly
-      // reset upon establishing a connection
-      dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE;
+      dcbSerialParams.XonLim = 42;
+      dcbSerialParams.XoffLim = 42;
+      dcbSerialParams.fAbortOnError = TRUE;
+      dcbSerialParams.fDtrControl = DTR_CONTROL_HANDSHAKE;
+      dcbSerialParams.fRtsControl = RTS_CONTROL_HANDSHAKE;
+      dcbSerialParams.fBinary = TRUE;
+      dcbSerialParams.fParity = FALSE;
+      dcbSerialParams.fInX = FALSE;
+      dcbSerialParams.fOutX = FALSE;
+      dcbSerialParams.XonChar = (unsigned char) 0x11;
+      dcbSerialParams.XoffChar = (unsigned char) 0x13;
+      dcbSerialParams.fErrorChar = FALSE;
+      dcbSerialParams.fNull = FALSE;
+      dcbSerialParams.fOutxCtsFlow = FALSE;
+      dcbSerialParams.fOutxDsrFlow = FALSE;
 
       // Set the parameters and check for their proper application
       if (!SetCommState(hSerial, &dcbSerialParams)) {
@@ -118,9 +130,11 @@ bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar) {
   if (!WriteFile(this->hSerial, (void *)buffer, nbChar, &bytesSend, 0)) {
     // In case it don't work get comm error and return false
     ClearCommError(this->hSerial, &this->errors, &this->status);
-
     return false;
   } else
+    ::Sleep(250);          // Sleep 250ms to ensure a good break
+    FlushFileBuffers(this->hSerial);
+    PurgeComm(this->hSerial, PURGE_RXCLEAR | PURGE_TXCLEAR);
     return true;
 #else
   (unsigned char)*buffer;

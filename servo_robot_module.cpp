@@ -129,7 +129,7 @@ Robot *ServoRobotModule::robotRequire() {
         colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
                     e->emit().c_str());
         delete e;
-        return NULL;
+        continue;
       }
       return (*i);
     }

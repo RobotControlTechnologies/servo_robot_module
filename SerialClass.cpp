@@ -6,6 +6,7 @@
 #include "SerialClass.h"
 #include "stdio.h"
 #include <string>
+#include "string.h"
 #include <errno.h>
 #include "error.h"
 Serial::Serial(char *portName) {

@@ -137,7 +137,6 @@ bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar) {
     PurgeComm(this->hSerial, PURGE_RXCLEAR | PURGE_TXCLEAR);
     return true;
 #else
-  (unsigned char)*buffer;
   if (write(com, buffer, nbChar) == ERROR_VALUE) {
     return false;
   };

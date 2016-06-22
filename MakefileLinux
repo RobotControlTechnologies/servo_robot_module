@@ -7,7 +7,7 @@ MKDIR = mkdir
 RM = rm
 
 # Constants
-MODULE_HEADERS_DIR = /var/lib/jenkins/workspace/module_headers/101
+MODULE_HEADERS_DIR = /var/lib/jenkins/workspace/module_headers/100
 SIMPLEINI_DIR = /var/lib/jenkins/workspace/simpleini
 ERRORS_DIR = /var/lib/jenkins/workspace/wrappers/rcml_common
 ERRORS_HEADERS_DIR = /var/lib/jenkins/workspace/module_headers

@@ -7,32 +7,29 @@ RM = "C:\MinGW\msys\1.0\bin\rm.exe"
 MKDIR = "C:\MinGW\msys\1.0\bin\mkdir.exe"
 
 # Constants
-MODULE_HEADERS_DIR = "d:\workspace\rcml\source\module_headers\100"
-SIMPLEINI_DIR = "d:\workspace\rcml\simpleini"
-ERRORS_DIR = "d:\workspace\rcml\source\module_wrapper\rcml_common"
-ERRORS_HEADERS_DIR = "d:\workspace\rcml\source\module_headers"
+MODULE_HEADERS_DIR = ../module_headers/100
+SIMPLEINI_DIR = ../simpleini
+ERRORS_DIR = ../wrappers/rcml_common
+ERRORS_HEADERS_DIR = ../module_headers
 
 INCLUDE_DIR_FLAGS = -I${MODULE_HEADERS_DIR} -I${SIMPLEINI_DIR} -I${ERRORS_DIR} -I${ERRORS_HEADERS_DIR}
-
 FLAGS_MUTUAL = -Wall -m32 -std=c++11 ${INCLUDE_DIR_FLAGS} -MMD -MP -MF "${OBJECTDIR}/$@.d" -DBUILD_NUMBER=${BUILD_NUMBER} -DIS_MODULE
 
 .PHONY: debug
 
 debug: OBJECTDIR = build/Debug
 debug: FLAGS = -g ${FLAGS_MUTUAL}
-debug: FILENAME_FIX = debug
 debug: clean module
 
 release: OBJECTDIR = build/Release
 release: FLAGS = -O3 ${FLAGS_MUTUAL}
-release: FILENAME_FIX = release
 release: clean module
 
 clean:
 	@echo "-------------------------" 
 	${RM} -rf ${OBJECTDIR}
 
-error.o: d:\workspace\rcml\source\module_wrapper\rcml_common\error.cpp
+error.o: ${ERRORS_DIR}/error.cpp
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} -f "${OBJECTDIR}/$@.d"
@@ -44,13 +41,13 @@ SerialClass.o: SerialClass.cpp error.o
 	${RM} -f "${OBJECTDIR}/$@.d"
 	$(COMPILE.cc) $(FLAGS) -o ${OBJECTDIR}/SerialClass.o SerialClass.cpp
 
-servo_robot_module.o:  servo_robot_module.cpp error.o
+servo_robot_module.o: servo_robot_module.cpp error.o
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
 	${RM} -f "${OBJECTDIR}/$@.d"
-	$(COMPILE.cc) $(FLAGS) -o  ${OBJECTDIR}/servo_robot_module.o servo_robot_module.cpp
+	$(COMPILE.cc) $(FLAGS) -o ${OBJECTDIR}/servo_robot_module.o servo_robot_module.cpp
 
 module: SerialClass.o servo_robot_module.o error.o
 	@echo "-------------------------" 
 	${MKDIR} -p ${OBJECTDIR}
-	${LINK.cc} -m32 -shared ${OBJECTDIR}/error.o ${OBJECTDIR}/servo_robot_module.o ${OBJECTDIR}/SerialClass.o -o ${OBJECTDIR}/servo_module_$(FILENAME_FIX).dll 
+	${LINK.cc} -m32 -shared ${OBJECTDIR}/error.o ${OBJECTDIR}/servo_robot_module.o ${OBJECTDIR}/SerialClass.o -o ${OBJECTDIR}/servo_module.dll

@@ -8,7 +8,7 @@
 #include <string>
 #include "string.h"
 #include <errno.h>
-#include "error.h"
+#include <error.h>
 Serial::Serial(char *portName) {
   // We're not yet connected
   this->connected = false;
@@ -22,11 +22,10 @@ Serial::Serial(char *portName) {
     // If not success full display an Error
     if (GetLastError() == ERROR_FILE_NOT_FOUND) {
       // Print Error if neccessary
-      throw new Error(ConsoleColor(ConsoleColor::red),"Error: Handle was not attached. Reason: %s not available.\n",
-             portName);
+      throw new Error("Error: Handle was not attached. Reason: %s not available.\n", portName);
 
     } else {
-      throw new Error(ConsoleColor(ConsoleColor::red),"Unknown error on com port!");
+      throw new Error("Unknown error on com port!");
     }
   } else {
     // If connected we try to set the comm parameters
@@ -60,7 +59,7 @@ Serial::Serial(char *portName) {
 
       // Set the parameters and check for their proper application
       if (!SetCommState(hSerial, &dcbSerialParams)) {
-        throw new Error(ConsoleColor(ConsoleColor::red),"Error: Could not set Serial Port parameters");
+        throw new Error("Error: Could not set Serial Port parameters");
       } else {
         // If everything went fine we're connected
         this->connected = true;
@@ -77,7 +76,7 @@ Serial::Serial(char *portName) {
 
   /* Error Handling */
   if (tcgetattr(com, &tty) != 0) {
-    throw new Error(ConsoleColor(ConsoleColor::red),"Error handling  %d from tcgetattr: %s\n", errno, strerror(errno));
+    throw new Error("Error handling  %d from tcgetattr: %s\n", errno, strerror(errno));
   }
 
   /* Save old tty parameters */
@@ -103,7 +102,7 @@ Serial::Serial(char *portName) {
   /* Flush Port, then applies attributes */
   tcflush(com, TCIFLUSH);
   if (tcsetattr(com, TCSANOW, &tty) != 0) {
-    throw new Error(ConsoleColor(ConsoleColor::red), "Error apply attributes %d from tcsetattr\n", errno);
+    throw new Error("Error apply attributes %d from tcsetattr\n", errno);
   }
   this->connected = true;
 #endif
@@ -140,7 +139,7 @@ bool Serial::WriteData(unsigned char *buffer, unsigned int nbChar) {
 #else
   if (write(com, buffer, nbChar) == ERROR_VALUE) {
     return false;
-  };
+  }
   return true;
 #endif
 }

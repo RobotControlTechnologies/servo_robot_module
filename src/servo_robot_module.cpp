@@ -73,9 +73,7 @@ ServoLimits::ServoLimits(int number, int _min, int _max, int start_position,
     current_position(start_position){}
 
 ServoRobotModule::ServoRobotModule()
-  : robot_axis(NULL),
-    count_axis(LOCKED_AXIS),
-    colorPrintf_p(NULL){
+{
   mi = new ModuleInfo;
   mi->uid = IID;
   mi->mode = ModuleInfo::Modes::PROD;
@@ -192,7 +190,7 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
       throw new Error("Can't load '%s' file!\n", ConfigPath.c_str());
     }
     int servo_count = getIniValueInt(&ini, "main", "servo_count");
-    count_axis = count_axis + servo_count;
+    count_axis = LOCKED_AXIS + servo_count;
 
     std::vector<ServoLimits> servo_limits;
     for (int i = 1; i < servo_count + 1; ++i) {

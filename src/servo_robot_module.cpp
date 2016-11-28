@@ -47,8 +47,7 @@ inline int getIniValueInt(CSimpleIniA *ini, const char *section_name,
                           const char *key_name) {
   int tmp = ini->GetLongValue(section_name, key_name, ERROR_VALUE);
   if (tmp == ERROR_VALUE) {
-    throw new Error(ConsoleColor(ConsoleColor::red),
-                    "Not specified value for \"%s\" in section \"%s\"!\n",
+    throw new Error("Not specified value for \"%s\" in section \"%s\"!\n",
                     key_name, section_name);
   }
   return tmp;
@@ -57,8 +56,7 @@ inline const char *getIniValueChar(CSimpleIniA *ini, const char *section_name,
                                    const char *key_name) {
   const char *result = ini->GetValue(section_name, key_name, NULL);
   if (!result) {
-    throw new Error(ConsoleColor(ConsoleColor::red),
-                    "Not specified value for \"%s\" in section \"%s\"!\n",
+    throw new Error("Not specified value for \"%s\" in section \"%s\"!\n",
                     key_name, section_name);
   }
   return result;
@@ -72,12 +70,10 @@ ServoLimits::ServoLimits(int number, int _min, int _max, int start_position,
     start_position(start_position),
     safe_position(safe_position),
     increment(increment),
-    current_position(start_position){};
+    current_position(start_position){}
 
 ServoRobotModule::ServoRobotModule()
-  : robot_axis(NULL),
-    count_axis(LOCKED_AXIS),
-    colorPrintf_p(NULL){
+{
   mi = new ModuleInfo;
   mi->uid = IID;
   mi->mode = ModuleInfo::Modes::PROD;
@@ -127,8 +123,7 @@ Robot *ServoRobotModule::robotRequire() {
         (*i)->connect();
         return (*i);
       } catch (Error *e) {
-        colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
-                    e->emit().c_str());
+        colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s", e->emit().c_str());
         delete e;
       }
     }
@@ -192,11 +187,10 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
   Error *init_error = new Error;
   try {
     if (ini.LoadFile(ConfigPath.c_str()) < 0) {
-      throw new Error(ConsoleColor(ConsoleColor::red),
-                      "Can't load '%s' file!\n", ConfigPath.c_str());
+      throw new Error("Can't load '%s' file!\n", ConfigPath.c_str());
     }
     int servo_count = getIniValueInt(&ini, "main", "servo_count");
-    count_axis = count_axis + servo_count;
+    count_axis = LOCKED_AXIS + servo_count;
 
     std::vector<ServoLimits> servo_limits;
     for (int i = 1; i < servo_count + 1; ++i) {
@@ -220,7 +214,6 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
         }
         if (min < 0 || min > 180) {
           _error->append(new Error(
-              ConsoleColor(ConsoleColor::red),
               "Wrong min limit '%d', should be in borders [0,180]", min));
         }
 
@@ -232,12 +225,10 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
 
         if (max < 0 || max > 180) {
           _error->append(new Error(
-              ConsoleColor(ConsoleColor::red),
               "Wrong max limit '%d', should be in borders [0,180]", max));
         }
         if (max < min) {
-          _error->append(new Error(ConsoleColor(ConsoleColor::red),
-                                   "min bigger than max"));
+          _error->append(new Error("min bigger than max"));
         }
 
         try {
@@ -258,8 +249,7 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
             _error->append(e);
           }
           if (top < low) {
-          _error->append(new Error(ConsoleColor(ConsoleColor::red),
-                                   "low_control_value bigger than top_control_value"));
+          _error->append(new Error("low_control_value bigger than top_control_value"));
           }
         }
 
@@ -269,8 +259,7 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
           _error->append(e);
         }
         if (start_pos < min || start_pos > max) {
-          _error->append(new Error(ConsoleColor(ConsoleColor::red),
-                                   "Start position is out of limits"));
+          _error->append(new Error("Start position is out of limits"));
         }
 
         try {
@@ -279,13 +268,11 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
           _error->append(e);
         }
         if (safe_pos < min || safe_pos > max) {
-          _error->append(new Error(ConsoleColor(ConsoleColor::red),
-                                   "Safe position is out of limits"));
+          _error->append(new Error("Safe position is out of limits"));
         }
         _error->checkSelf();
       } catch (Error *e) {
-        init_error->append(new Error(e, ConsoleColor(ConsoleColor::red),
-                                     "%s errors:", servo_name.c_str()));
+        init_error->append(new Error(e, "%s errors:", servo_name.c_str()));
         continue;
       }
 
@@ -324,8 +311,8 @@ void ServoRobotModule::prepare(colorPrintfModule_t *colorPrintf_p,
     }
 
   } catch (Error *e) {
-    colorPrintf(ConsoleColor(ConsoleColor::red), "Error(s): %s",
-                e->emit().c_str());
+    colorPrintf(ConsoleColor(ConsoleColor::red),
+                "Error(s): %s", e->emit().c_str());
     delete e;
     is_prepare_failed = true;
     count_axis = 0;
@@ -360,9 +347,9 @@ void ServoRobotModule::destroy() {
 
   delete[] robot_axis;
   delete this;
-};
+}
 
-bool ServoRobot::isAvaliable() { return is_aviable; };
+bool ServoRobot::isAvaliable() { return is_aviable; }
 
 void ServoRobot::disconnect() {
   if (SP && SP->IsConnected()) {
@@ -370,7 +357,7 @@ void ServoRobot::disconnect() {
     SP->~Serial();
   }
   is_aviable = true;
-};
+}
 
 void ServoRobot::setStartPosition() {
   unsigned char buffer[3];
@@ -381,12 +368,11 @@ void ServoRobot::setStartPosition() {
     buffer[2] = servo_data[i].start_position;
     if (!SP->WriteData(buffer, 3)) {
       throw new Error(
-          ConsoleColor(ConsoleColor::red),
           "Can't write '%d' to servo %d. Setup safe position failed!",
           buffer[2], buffer[1]);
     }
   }
-};
+}
 
 void ServoRobot::setSafePosition(unsigned char command) {
   unsigned char buffer[3];
@@ -397,12 +383,11 @@ void ServoRobot::setSafePosition(unsigned char command) {
     buffer[2] = servo_data[i].safe_position;
     if (!SP->WriteData(buffer, 3)) {
       throw new Error(
-          ConsoleColor(ConsoleColor::red),
           "Can't write '%d' to servo %d. Setup safe position failed!",
           buffer[2], buffer[1]);
     }
   }
-};
+}
 
 void ServoRobot::connect() {
   if (SP) {
@@ -416,7 +401,7 @@ void ServoRobot::connect() {
 #endif
   if (!SP->IsConnected()) {
     SP->~Serial();
-    throw new Error(ConsoleColor(ConsoleColor::red), "Can't connect to robot");
+    throw new Error("Can't connect to robot");
   }
 
   try {
@@ -428,11 +413,11 @@ void ServoRobot::connect() {
 #endif
     setStartPosition();
   } catch (Error *e) {
-    throw new Error(e, ConsoleColor(ConsoleColor::red), "Connection error:");
+    throw new Error(e, "Connection error:");
   }
 
   is_aviable = false;
-};
+}
 
 FunctionResult *ServoRobot::executeFunction(CommandMode mode,
                                             system_value command_index,
@@ -449,15 +434,13 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
         unsigned char input2 = (unsigned char)*(variable_value *)args[1];
 
         if (input1 > servo_data.size()) {
-          throw new Error(ConsoleColor(ConsoleColor::red),
-                          "wrong axis number %d", input1);
+          throw new Error("wrong axis number %d", input1);
         }
 
         int _min = servo_data[input1 - 1]._min;
         int _max = servo_data[input1 - 1]._max;
         if ((input2 > _max) || (input2 <= _min)) {
-          throw new Error(ConsoleColor(ConsoleColor::red),
-                          "wrong axis value %d, should be in borders [%d, %d]",
+          throw new Error("wrong axis value %d, should be in borders [%d, %d]",
                           input1, _min, _max);
         }
 
@@ -468,8 +451,7 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
         buffer[2] = input2;
 
         if (!SP->WriteData(buffer, command_bytes)) {
-          throw new Error(ConsoleColor(ConsoleColor::red),
-                          "Can't write '%d' to servo %d. Sending data failed!",
+          throw new Error("Can't write '%d' to servo %d. Sending data failed!",
                           input2, input1);
         }
         break;
@@ -479,17 +461,18 @@ FunctionResult *ServoRobot::executeFunction(CommandMode mode,
 
     fr = new FunctionResult(FunctionResult::Types::VALUE, 0);
   } catch (Error *e) {
-    colorPrintf(ConsoleColor(ConsoleColor::red), "Error: %s",
-                e->emit().c_str());
+    colorPrintf(ConsoleColor(ConsoleColor::red),
+                "Error: %s", e->emit().c_str());
     fr = new FunctionResult(FunctionResult::Types::EXCEPTION, 0);
     delete e;
   }
   return fr;
-};
+}
 
 void ServoRobot::axisControl(system_value axis_index, variable_value value) {
   if (axis_index>locked_index) {
-    colorPrintf(ConsoleColor(ConsoleColor::red), "Wrong axis Index: %d", axis_index);
+    colorPrintf(ConsoleColor(ConsoleColor::red), 
+                "Wrong axis Index: %d", axis_index);
     return;
   } else if(axis_index == locked_index){
     is_locked = !value;
@@ -499,7 +482,8 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
         if (servo_data[servo_number].increment){
           value = servo_data[servo_number].current_position + value;
           if (value > servo_data[servo_number]._max || value < servo_data[servo_number]._min){
-            colorPrintf(ConsoleColor(ConsoleColor::red), "Axis '%d' limit error\n", axis_index);
+            colorPrintf(ConsoleColor(ConsoleColor::red),
+                        "Axis '%d' limit error\n", axis_index);
             return;
           }
           servo_data[servo_number].current_position = value;
@@ -510,15 +494,15 @@ void ServoRobot::axisControl(system_value axis_index, variable_value value) {
         buffer[1] = axis_index;
         buffer[2] = (unsigned char) value;  
         if (!SP->WriteData(buffer, command_bytes)) {
-          colorPrintf(ConsoleColor(ConsoleColor::green), 
-                          "Can't write '%d' to servo %d. Sending data failed!",
-                          value, axis_index);
+          colorPrintf(ConsoleColor(ConsoleColor::green),
+                      "Can't write '%d' to servo %d. Sending data failed!",
+                      value, axis_index);
           return;
         }
       }
   }
-  colorPrintf(ConsoleColor(ConsoleColor::green), "change axis value: %d = %f\n",
-              axis_index, value);
+  colorPrintf(ConsoleColor(ConsoleColor::green),
+              "change axis value: %d = %f\n", axis_index, value);
 }
 
 void ServoRobot::colorPrintf(ConsoleColor colors, const char *mask, ...) {
@@ -537,7 +521,7 @@ void ServoRobotModule::colorPrintf(ConsoleColor colors, const char *mask, ...) {
 
 PREFIX_FUNC_DLL unsigned short getRobotModuleApiVersion() {
   return MODULE_API_VERSION;
-};
+}
 
 PREFIX_FUNC_DLL RobotModule *getRobotModuleObject() {
   return new ServoRobotModule();

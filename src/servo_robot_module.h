@@ -62,16 +62,16 @@ struct AxisMinMax {
 
 class ServoRobotModule : public RobotModule {
   v_connections aviable_connections;
-  FunctionData **robot_functions;
-  AxisData **robot_axis;
+  FunctionData **robot_functions = nullptr;
+  AxisData **robot_axis = nullptr;
 
   std::vector<AxisMinMax> axis_settings;
-  int count_axis;
+  int count_axis = 0;
   const int count_functions = 1;
 
   bool is_prepare_failed;
-  colorPrintfModuleVA_t *colorPrintf_p;
-  ModuleInfo *mi;
+  colorPrintfModuleVA_t *colorPrintf_p = nullptr;
+  ModuleInfo *mi = nullptr;
 
   void colorPrintf(ConsoleColor colors, const char *mask, ...);
 
